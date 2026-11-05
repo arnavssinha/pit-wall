@@ -35,6 +35,7 @@ public final class TrackLoader {
                 number(props, "lapLengthMeters", id),
                 number(props, "medianRaceLapSeconds", id),
                 number(props, "trackWearMultiplier", id),
+                number(props, "overtakingDifficulty", id),
                 required(props, "difficultyLabel", id),
                 required(props, "description", id),
                 required(props, "dataSource", id));

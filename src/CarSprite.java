@@ -35,6 +35,9 @@ public final class CarSprite {
     /** Yellow ring around the player's car, or null for other cars. */
     private final GOval ring;
 
+    /** Red warning triangle shown above a rival that is about to attack the player. */
+    private final GPolygon alert;
+
     /** Rotation currently applied to the parts, in degrees. */
     private double appliedDegrees;
 
@@ -92,8 +95,35 @@ public final class CarSprite {
         } else {
             ring = null;
         }
+        alert = new GPolygon();
+        double s = TrackDrawing.CAR_WIDTH;
+        alert.addVertex(0, -s);
+        alert.addVertex(s, s * 0.8);
+        alert.addVertex(-s, s * 0.8);
+        style(alert, Palette.DANGER, Color.WHITE);
+        alert.setVisible(false);
         appliedDegrees = 0;
         appliedEnlargement = 1;
+    }
+
+    /**
+     * Returns the attack warning triangle, so the world view can add it on top of the cars.
+     *
+     * @return the triangle
+     */
+    public GPolygon getAlert() {
+        return alert;
+    }
+
+    /**
+     * Shows or hides the attack warning above this car.
+     *
+     * @param visible true to show
+     */
+    public void setAlert(boolean visible) {
+        if (alert.isVisible() != visible) {
+            alert.setVisible(visible);
+        }
     }
 
     /**
@@ -195,7 +225,11 @@ public final class CarSprite {
             ring.setLocation(px - ring.getWidth() / 2, py - ring.getHeight() / 2);
         }
         if (rescale) {
+            alert.scale(enlargement / appliedEnlargement);
             appliedEnlargement = enlargement;
+        }
+        if (alert.isVisible()) {
+            alert.setLocation(px, py - TrackDrawing.CAR_LENGTH * zoom * appliedEnlargement);
         }
     }
 }

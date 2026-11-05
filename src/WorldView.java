@@ -80,6 +80,9 @@ public final class WorldView extends GCompound {
             }
         }
         addSprite(playerSprite);
+        for (CarSprite sprite : sprites) {
+            add(sprite.getAlert());
+        }
     }
 
     /**
@@ -119,10 +122,13 @@ public final class WorldView extends GCompound {
     }
 
     /**
-     * Moves every car sprite to its car's current position.
+     * Moves every car sprite to its car's current position and shows the attack warning on one car.
+     *
+     * @param warned the rival about to attack the player, or null
      */
-    public void updateCars() {
+    public void updateCars(Car warned) {
         for (CarSprite sprite : sprites) {
+            sprite.setAlert(sprite.getCar() == warned);
             sprite.update(drawing, zoom);
         }
     }

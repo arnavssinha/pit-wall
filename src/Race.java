@@ -34,6 +34,15 @@ public final class Race {
     /** Cars in race order, re-sorted after every step. */
     private final ArrayList<Car> standings = new ArrayList<Car>();
 
+    /** Corners with braking zones, where battles happen. */
+    private final List<Corner> corners;
+
+    /** Runs the battles. */
+    private final BattleManager battles;
+
+    /** Messages for the radio feed, oldest first. */
+    private final ArrayList<RaceMessage> messages = new ArrayList<RaceMessage>();
+
     /** Simulated qualifying results, fastest first; this order is the grid. */
     private final List<QualifyingEntry> qualifying;
 
@@ -66,8 +75,7 @@ public final class Race {
     private int finishedCount;
 
     /**
-     * Sets up the grid: picks drivers, shuffles the grid order and places the cars.
-     * Grid order is random for now; simulated qualifying arrives in M3.
+     * Sets up the race: finds the corners, runs qualifying, and places the cars on the grid.
      *
      * @param config race settings
      * @param track the circuit
@@ -85,6 +93,8 @@ public final class Race {
         this.random = new Random(config.getSeed());
         this.profiles = new ProfileSet(track, LapCalibrator.gripScaleFor(track));
         this.conditions = TrackConditions.neutral();
+        this.corners = Corner.findAll(track, profiles.forCarGrip(Compound.MEDIUM.getDryGrip()));
+        this.battles = new BattleManager(this, random);
 
         ArrayList<Driver> field = new ArrayList<Driver>(roster);
         Collections.shuffle(field, random);
@@ -97,6 +107,8 @@ public final class Race {
             double gridLateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
             boolean isPlayer = entry.getDriver() == playerDriver;
             Car car = new Car(i, entry.getDriver(), i + 1, entry.getPace(), gridDistance, gridLateral, startCompound, isPlayer);
+            double spread = Tuning.AI_AGGRESSION_MAX - Tuning.AI_AGGRESSION_MIN;
+            car.setAggression(Tuning.AI_AGGRESSION_MIN + random.nextDouble() * spread);
             cars.add(car);
             standings.add(car);
             if (isPlayer) {
@@ -141,6 +153,12 @@ public final class Race {
     public void step() {
         double dt = Tuning.SIM_STEP_SECONDS;
         int n = cars.size();
+        for (Car car : cars) {
+            if (!car.isPlayer()) {
+                car.setPushLevel(AiDriver.choosePush(car));
+            }
+        }
+        battles.beforeMove();
         double[] moves = new double[n];
         for (int i = 0; i < n; i++) {
             moves[i] = planMove(cars.get(i), dt);
@@ -154,12 +172,14 @@ public final class Race {
         }
         time += dt;
         Collections.sort(standings, Race::compareStandings);
+        battles.afterMove();
     }
 
     /**
      * Decides how far one car moves this step.
-     * The car aims for the profile speed, eases off to follow a close car ahead, and is
-     * finally clamped so it can never get nearer than the minimum separation.
+     * The car aims for the profile speed, gets a tow in the slipstream, speeds up (attacker) or
+     * eases off (defender) during a pass, eases off to follow a close car ahead, and is finally
+     * clamped so it can never get nearer than the minimum separation to the car blocking it.
      *
      * @param car the car
      * @param dt time step in seconds
@@ -167,7 +187,13 @@ public final class Race {
      */
     private double planMove(Car car, double dt) {
         double target = car.targetSpeed(profiles, conditions);
-        Car ahead = carAheadOnTrack(car);
+        Car partner = car.getPassPartner();
+        if (partner != null && car.isPassAttacker()) {
+            target = Math.max(target * (1 + Tuning.PASS_SPEED_BONUS), partner.getSpeed() + Tuning.PASS_MIN_CLOSING);
+        } else if (partner != null) {
+            target *= 1 - Tuning.PASS_DEFENDER_SLOW;
+        }
+        Car ahead = blockingCarAhead(car);
         double gap = ahead == null ? Double.MAX_VALUE : trackGap(car, ahead);
         double tow = slipstreamFactor(gap, car.getSpeed(), onStraight(car));
         if (tow > 1.0) {
@@ -239,10 +265,78 @@ public final class Race {
      * @return true to deploy on straights
      */
     private boolean wantsDeploy(Car car) {
-        if (car.isPlayer()) {
-            return car.isErsWanted();
+        return car.isPlayer() ? car.isErsWanted() : AiDriver.wantsDeploy(car);
+    }
+
+    /**
+     * Finds the car that limits how far a car may move: the nearest car ahead on the road,
+     * except a passing partner that is already far enough to the side to be alongside safely.
+     *
+     * @param car the car
+     * @return the blocking car, or null
+     */
+    private Car blockingCarAhead(Car car) {
+        Car best = null;
+        double bestGap = Double.MAX_VALUE;
+        for (Car other : cars) {
+            if (other == car || (other == car.getPassPartner() && sideBySide(car, other))) {
+                continue;
+            }
+            double gap = trackGap(car, other);
+            if (gap < bestGap) {
+                bestGap = gap;
+                best = other;
+            }
         }
-        return car.getErs().getCharge() > Tuning.AI_ERS_DEPLOY_ABOVE;
+        return best;
+    }
+
+    /**
+     * Returns whether two cars are far enough apart sideways to be alongside without touching.
+     *
+     * @param a one car
+     * @param b the other car
+     * @return true if their sideways gap is at least Tuning.LATERAL_CLEARANCE
+     */
+    public static boolean sideBySide(Car a, Car b) {
+        return Math.abs(a.getLateralOffset() - b.getLateralOffset()) >= Tuning.LATERAL_CLEARANCE;
+    }
+
+    /**
+     * Adds a message for the radio feed.
+     *
+     * @param text the message
+     * @param aboutPlayer true if it concerns the player's car
+     */
+    public void addMessage(String text, boolean aboutPlayer) {
+        messages.add(new RaceMessage(time, text, aboutPlayer));
+    }
+
+    /**
+     * Returns all messages so far, oldest first.
+     *
+     * @return the messages, read-only
+     */
+    public List<RaceMessage> getMessages() {
+        return Collections.unmodifiableList(messages);
+    }
+
+    /**
+     * Returns the corners with braking zones.
+     *
+     * @return corners in lap order, read-only
+     */
+    public List<Corner> getCorners() {
+        return Collections.unmodifiableList(corners);
+    }
+
+    /**
+     * Returns the battle manager.
+     *
+     * @return the battles
+     */
+    public BattleManager getBattles() {
+        return battles;
     }
 
     /**

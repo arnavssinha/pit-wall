@@ -30,6 +30,7 @@ you make the strategy calls.
 |---|---|
 | Q / W / E | Push level: Conserve / Balanced / Push |
 | X | ERS deploy on or off (spends the battery on straights for extra speed) |
+| A / S / D | In a battle: Attack / Defend / Hold (or click the buttons). Pressed outside a battle, it pre-selects your stance for the next one |
 | Space | Pause or resume |
 | T | Change time speed: 1x, 2x, 4x, 8x (starts at 2x) |
 | Z | Switch between follow camera and whole-track view |

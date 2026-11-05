@@ -22,6 +22,9 @@ public final class TrackProfile {
     /** How hard the surface and layout are on tires; 1.0 is neutral. */
     private final double trackWearMultiplier;
 
+    /** How hard it is to overtake here, from 0 (easy) to 1 (almost impossible). */
+    private final double overtakingDifficulty;
+
     /** Difficulty label shown to the player. */
     private final String difficultyLabel;
 
@@ -40,12 +43,13 @@ public final class TrackProfile {
      * @param lapLengthMeters official lap length in meters
      * @param medianRaceLapSeconds typical race lap in seconds
      * @param trackWearMultiplier tire wear multiplier, 1.0 is neutral
+     * @param overtakingDifficulty overtaking difficulty from 0 to 1
      * @param difficultyLabel difficulty label
      * @param description one-line description
      * @param dataSource note on where the data came from
      */
     public TrackProfile(String id, String name, String country, double lapLengthMeters,
-                        double medianRaceLapSeconds, double trackWearMultiplier, String difficultyLabel, String description,
+                        double medianRaceLapSeconds, double trackWearMultiplier, double overtakingDifficulty, String difficultyLabel, String description,
                         String dataSource) {
         this.id = id;
         this.name = name;
@@ -53,6 +57,7 @@ public final class TrackProfile {
         this.lapLengthMeters = lapLengthMeters;
         this.medianRaceLapSeconds = medianRaceLapSeconds;
         this.trackWearMultiplier = trackWearMultiplier;
+        this.overtakingDifficulty = overtakingDifficulty;
         this.difficultyLabel = difficultyLabel;
         this.description = description;
         this.dataSource = dataSource;
@@ -110,6 +115,15 @@ public final class TrackProfile {
      */
     public double getTrackWearMultiplier() {
         return trackWearMultiplier;
+    }
+
+    /**
+     * Returns how hard it is to overtake.
+     *
+     * @return difficulty from 0 to 1
+     */
+    public double getOvertakingDifficulty() {
+        return overtakingDifficulty;
     }
 
     /**

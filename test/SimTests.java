@@ -58,6 +58,9 @@ public final class SimTests {
         check("brakes fade only when hot; ERS stays in 0-100%", () -> testBrakesAndErs());
         check("grid follows qualifying; player is on the grid", () -> testQualifyingGrid());
         check("slipstream helps only close behind on straights", () -> testSlipstream());
+        check("corners found with braking zones and difficulty", () -> testCorners());
+        check("pass chances: Monza-like high, Monaco-like very low", () -> testPassProbabilityBands());
+        check("AI-only Monza races: pass rate in band", () -> testRacePassRate());
     }
 
     /**
@@ -300,27 +303,39 @@ public final class SimTests {
         long start = System.currentTimeMillis();
         int steps = 0;
         double closest = Double.MAX_VALUE;
+        int sideBySideSteps = 0;
         while (!race.isOver()) {
             race.step();
             steps++;
             require(steps < 60 * 60 * 60, "race did not finish within one simulated hour");
             for (Car car : race.getCars()) {
-                require(Double.isFinite(car.getDistance()) && Double.isFinite(car.getSpeed()),
-                        "non-finite state for " + car.getDriver().getCode());
+                require(Double.isFinite(car.getDistance()) && Double.isFinite(car.getSpeed())
+                        && Double.isFinite(car.getLateralOffset()), "non-finite state for " + car.getDriver().getCode());
                 require(car.getSpeed() >= 0, "negative speed");
-                Car ahead = race.carAheadOnTrack(car);
-                double gap = race.trackGap(car, ahead);
-                closest = Math.min(closest, gap);
-                require(gap >= Tuning.MIN_SEPARATION - 1e-6,
-                        "overlap: " + car.getDriver().getCode() + " is " + gap + " m behind " + ahead.getDriver().getCode());
+                for (Car other : race.getCars()) {
+                    if (other == car) {
+                        continue;
+                    }
+                    double gap = race.trackGap(car, other);
+                    if (gap < Tuning.MIN_SEPARATION - 1e-6) {
+                        require(Race.sideBySide(car, other) && car.getPassPartner() == other,
+                                "overlap: " + car.getDriver().getCode() + " is " + gap + " m behind "
+                                + other.getDriver().getCode() + " without being alongside in a pass");
+                        sideBySideSteps++;
+                    } else {
+                        closest = Math.min(closest, gap);
+                    }
+                }
             }
             if (steps % 30 == 0) {
                 checkGapsIncrease(race);
             }
         }
         long elapsed = System.currentTimeMillis() - start;
-        System.out.printf("      %d steps, %.1f s race time, %d ms wall time, closest gap %.2f m%n",
+        System.out.printf("      %d steps, %.1f s race time, %d ms wall time, closest nose-to-tail gap %.2f m%n",
                 steps, race.getTime(), elapsed, closest);
+        System.out.printf("      %d battle attacks, %d passes, %d car-steps alongside%n",
+                race.getBattles().getAttempts(), race.getBattles().getPasses(), sideBySideSteps);
         List<Car> order = race.getStandings();
         Car winner = order.get(0);
         require(winner.getLapsCompleted() == Tuning.RACE_LAPS, "winner completed " + winner.getLapsCompleted() + " laps");
@@ -520,5 +535,77 @@ public final class SimTests {
         double near = Race.slipstreamFactor(20, speed, true);
         double far = Race.slipstreamFactor(60, speed, true);
         require(near > far && far > 1.0, "closer should mean more slipstream");
+    }
+
+    /**
+     * Checks Monza has several corners with braking zones, in lap order, with difficulty from 0 to 1.
+     */
+    private void testCorners() {
+        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster(), Compound.MEDIUM);
+        List<Corner> corners = race.getCorners();
+        require(corners.size() >= 5, "expected at least 5 braking corners, found " + corners.size());
+        for (int i = 0; i < corners.size(); i++) {
+            Corner c = corners.get(i);
+            require(c.getNumber() == i + 1, "corners not numbered in order");
+            require(c.getDifficulty() >= 0 && c.getDifficulty() <= 1, "difficulty out of range");
+        }
+        System.out.println("      monza braking corners: " + corners.size());
+    }
+
+    /**
+     * Checks the pass formula for two equal cars: on an easy track an attack against a car that
+     * holds usually works and against a defender sometimes works; on a very hard track an attack
+     * against a defender almost never works.
+     */
+    private void testPassProbabilityBands() {
+        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster(), Compound.MEDIUM);
+        Car a = race.getCars().get(1);
+        Car d = race.getCars().get(0);
+        Corner corner = race.getCorners().get(0);
+        double easyHold = chance(a, d, corner, Stance.HOLD, 0.15);
+        double easyDefend = chance(a, d, corner, Stance.DEFEND, 0.15);
+        double hardDefend = chance(a, d, corner, Stance.DEFEND, 0.9);
+        System.out.printf("      pass chance: easy track vs Hold %.2f, vs Defend %.2f; hard track vs Defend %.2f%n",
+                easyHold, easyDefend, hardDefend);
+        require(easyHold > 0.5 && easyHold < 0.95, "easy track vs Hold out of band");
+        require(easyDefend > 0.15 && easyDefend < easyHold, "easy track vs Defend out of band");
+        require(hardDefend < 0.1, "hard track vs Defend should be very low");
+    }
+
+    /**
+     * Pass probability for an attack at 0.5 s with no ERS and equal grip.
+     *
+     * @param a attacker
+     * @param d defender
+     * @param corner the corner
+     * @param defence the defender's stance
+     * @param trackDifficulty the track's overtaking difficulty
+     * @return probability
+     */
+    private static double chance(Car a, Car d, Corner corner, Stance defence, double trackDifficulty) {
+        Battle b = new Battle(a, d, corner, 0, 0.5, 0, false);
+        b.setAttackerStance(Stance.ATTACK);
+        b.setDefenderStance(defence);
+        return BattleResolver.passProbability(BattleResolver.passScore(b, 1.0, 1.0, false, false, trackDifficulty));
+    }
+
+    /**
+     * Runs three AI-only Monza races and checks the share of attacks that become passes, and that
+     * passes do happen but not on every corner.
+     */
+    private void testRacePassRate() {
+        int attempts = 0;
+        int passes = 0;
+        for (long seed = 11; seed <= 13; seed++) {
+            Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, seed), monza(), roster(), Compound.MEDIUM);
+            runToEnd(race);
+            attempts += race.getBattles().getAttempts();
+            passes += race.getBattles().getPasses();
+        }
+        double rate = passes / (double) Math.max(1, attempts);
+        System.out.printf("      3 races: %d attacks, %d passes (%.0f%% success, %.0f passes per race)%n",
+                attempts, passes, rate * 100, passes / 3.0);
+        require(rate > 0.25 && rate < 0.65, "pass success rate " + rate + " out of band");
+        require(passes / 3.0 >= 10 && passes / 3.0 <= 70, "passes per race out of band");
     }
 }

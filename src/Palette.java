@@ -74,6 +74,12 @@ public final class Palette {
     /** ERS battery fill. */
     public static final Color ERS = new Color(90, 170, 250);
 
+    /** Button background. */
+    public static final Color BUTTON = new Color(44, 52, 70);
+
+    /** Background of a disabled button. */
+    public static final Color BUTTON_DISABLED = new Color(30, 34, 44);
+
     /** Large headline font. */
     public static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 26);
 

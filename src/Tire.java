@@ -54,6 +54,15 @@ public final class Tire {
     }
 
     /**
+     * Adds wear from a one-off event, such as attacking or defending in a battle.
+     *
+     * @param amount wear to add
+     */
+    public void addWear(double amount) {
+        wear += amount;
+    }
+
+    /**
      * Extra heating or cooling from the track surface: wet tires on a drying track overheat,
      * slicks on a wet track run cold.
      *

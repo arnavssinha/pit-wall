@@ -36,6 +36,15 @@ public final class Ers {
     }
 
     /**
+     * Spends a lump of charge, for example on a move in a battle.
+     *
+     * @param amount charge to spend, from 0 to 1
+     */
+    public void spend(double amount) {
+        charge = Math.max(0, charge - amount);
+    }
+
+    /**
      * Returns the speed multiplier from deploying.
      *
      * @return more than 1 while deploying, otherwise 1

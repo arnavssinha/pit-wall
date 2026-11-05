@@ -110,3 +110,29 @@ by 0.6 s; at lap 9 the Soft is 7.6 s slower. Gauges and keys checked with screen
 **Verified:** 17/17 tests (grid follows qualifying, one player car, slipstream bands).
 
 **Next:** M4, battles and corner calls.
+
+## M4 Battles and corner calls (2026-11-05)
+
+**Done**
+- `Corner.findAll`: corners come from the track (curvature runs, apex, braking point from the speed
+  profile); only corners with a real braking zone host battles. Monza has 8.
+- `BattleManager`: a battle opens 1.6 s before a braking point when the car ahead is within 1.0 s.
+  Computer drivers plan their stance one corner early (`intent`), which drives the red warning
+  triangle above a rival about to attack you. Lapped or finished cars give way (blue flags).
+- `BattleResolver`: the brief's pass score and logistic probability, plus attack risk (lock-up, run
+  wide, contact) that grows with wear, brake heat, wetness and aggression. Costs: Defend loses 0.15 s
+  whether or not an attack comes; Attack heats brakes and wears tires; ERS can be spent on the move.
+- Visible passes: the attacker moves to the inside and drives past; cars may only be closer than the
+  minimum gap when they are a passing pair side by side (enforced by a test every step).
+- `DefaultStancePolicy` (computer drivers, and the player when the prompt times out) and `AiDriver`
+  (push level, ERS use). Aggression is drawn from a narrow random band per race.
+- UI: `BattlePrompt` with clickable `UiButton`s and a countdown, time slows to 0.25x and eases back,
+  keys A/S/D, `RadioFeed` (ArrayDeque) for results.
+
+**Verified:** 20/20 tests. AI-only Monza races: 33 percent of attacks succeed, about 34 passes per race.
+Pass chance for equal cars: easy track vs Hold 0.74, vs Defend 0.23; very hard track vs Defend 0.02.
+Screenshots show prompts, countdown, default stance, results and radio.
+
+**Not yet seen on screen:** a pass by the player car up close (the passing logic is covered by tests).
+
+**Next:** M5, pit stops, strategy and the setup screen.

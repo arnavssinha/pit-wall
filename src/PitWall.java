@@ -1,6 +1,7 @@
 import acm.graphics.GLabel;
 import acm.program.GraphicsProgram;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.List;
@@ -32,10 +33,16 @@ public final class PitWall extends GraphicsProgram {
     /** Seconds the self-test spends at each time speed it measures. */
     private static final double SELFTEST_SECONDS_PER_SPEED = 5.0;
 
+    /** Marker in the input queue for a mouse click (no real key has this code). */
+    private static final int CLICK = -1;
+
     /** True when started with --selftest. */
     private static boolean selfTest;
 
-    /** Keys pressed since the last frame. Filled by the input thread, emptied by the game loop. */
+    /**
+     * Key presses and mouse clicks since the last frame. Filled by the input thread, emptied by the
+     * game loop. A key is {code, shift}; a click is {CLICK, x, y}.
+     */
     private final transient ArrayDeque<int[]> pendingKeys = new ArrayDeque<int[]>();
 
     /** The track, loaded once. */
@@ -166,7 +173,11 @@ public final class PitWall extends GraphicsProgram {
             if (key == null) {
                 return;
             }
-            screen.handleKey(key[0], key[1] == 1);
+            if (key[0] == CLICK) {
+                screen.handleClick(key[1], key[2]);
+            } else {
+                screen.handleKey(key[0], key[1] == 1);
+            }
         }
     }
 
@@ -180,6 +191,18 @@ public final class PitWall extends GraphicsProgram {
     public void keyPressed(KeyEvent e) {
         synchronized (pendingKeys) {
             pendingKeys.add(new int[] {e.getKeyCode(), e.isShiftDown() ? 1 : 0});
+        }
+    }
+
+    /**
+     * Queues a mouse click for the game loop, like key presses.
+     *
+     * @param e the mouse event
+     */
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        synchronized (pendingKeys) {
+            pendingKeys.add(new int[] {CLICK, e.getX(), e.getY()});
         }
     }
 

@@ -77,7 +77,7 @@ public final class HudPanel extends GCompound {
                 d.getNumber(), d.getName(), d.getTeam().getName(), player.getGridPosition()),
                 left + 12, height - 52, Palette.HUD, Palette.PLAYER);
         carLine = text("", left + 12, height - 32, Palette.MONO, Palette.TEXT);
-        text("Q W E push   X ERS   Space pause   T speed   Z zoom   F follow next   G your car   R restart",
+        text("Q W E push  X ERS  A S D battle  Space pause  T speed  Z zoom  F/G camera  R restart",
                 left + 12, height - 14, Palette.SMALL, Palette.TEXT_DIM);
 
         bannerBox = new GRect(0, 0, 520, 84);

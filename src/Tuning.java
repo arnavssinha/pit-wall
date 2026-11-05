@@ -100,8 +100,8 @@ public final class Tuning {
     /** Sideways offset of grid slots from the centerline, alternating left and right, in meters. */
     public static final double GRID_LATERAL_OFFSET = 2.5;
 
-    /** Rate at which a car moves back to the racing line after the start, in meters per second. */
-    public static final double LATERAL_RETURN_SPEED = 0.6;
+    /** Rate at which a car moves sideways (off the grid, into and out of a pass), in meters per second. */
+    public static final double LATERAL_SPEED = 2.5;
 
     /**
      * Random per-car pace spread for one race, as a fraction (plus or minus). Balance choice:
@@ -133,6 +133,180 @@ public final class Tuning {
 
     /** Largest slipstream speed bonus, right behind the car ahead. Balance choice. */
     public static final double SLIPSTREAM_MAX_BONUS = 0.025;
+
+    /** A battle opens when the car ahead is within this time gap (brief: about 1.0 s). */
+    public static final double BATTLE_GAP_SECONDS = 1.0;
+
+    /** A battle opens this many seconds (at current speed) before the corner's braking point. */
+    public static final double BATTLE_OPEN_LEAD_SECONDS = 1.6;
+
+    /** Simulation speed while the player decides (brief: about 0.25x). */
+    public static final double BATTLE_SLOWDOWN = 0.25;
+
+    /** Real seconds the player has to choose a stance (brief: about 4). */
+    public static final double BATTLE_DECISION_SECONDS = 4.0;
+
+    /** Real seconds for time to ease back to normal speed after a battle. */
+    public static final double BATTLE_EASE_BACK_SECONDS = 1.2;
+
+    /** Real seconds the battle result stays on the prompt. */
+    public static final double BATTLE_RESULT_SECONDS = 2.5;
+
+    /** Race seconds after a player prompt before another prompt may appear. */
+    public static final double PROMPT_COOLDOWN_SECONDS = 10.0;
+
+    /** A computer driver decides its stance for the next corner once within this gap of the car ahead. */
+    public static final double INTENT_GAP_SECONDS = 2.0;
+
+    /** Corners need at least this braking speed drop, in m/s, to host battles. */
+    public static final double CORNER_MIN_SPEED_DROP = 8.0;
+
+    /** A braking speed drop this large, in m/s, makes a corner as easy to pass at as it gets. */
+    public static final double CORNER_EASY_SPEED_DROP = 60.0;
+
+    /** Constant term of the pass score. Balance choice. */
+    public static final double PASS_BASE_SCORE = -0.3;
+
+    /** Pass score per unit of speed-scale advantage (0.01 = 1 percent faster gives 0.4). Balance choice. */
+    public static final double PASS_PACE_WEIGHT = 40.0;
+
+    /** Pass score per unit of grip advantage. Balance choice. */
+    public static final double PASS_TIRE_WEIGHT = 15.0;
+
+    /** Pass score for being right behind rather than at the edge of the battle gap. Balance choice. */
+    public static final double PASS_CLOSENESS_WEIGHT = 1.0;
+
+    /** Pass score bonus for choosing Attack. Balance choice. */
+    public static final double PASS_ATTACK_BONUS = 1.0;
+
+    /** Pass score bonus when the attacker spends ERS. Balance choice. */
+    public static final double PASS_ERS_BONUS = 0.7;
+
+    /** Pass score lost when the defender spends ERS. Balance choice. */
+    public static final double PASS_ERS_DEFENCE = 0.5;
+
+    /** Pass score lost when the defender chooses Defend. Balance choice. */
+    public static final double PASS_DEFEND_BONUS = 1.6;
+
+    /** Pass score lost per unit of track overtaking difficulty. Balance choice. */
+    public static final double PASS_TRACK_WEIGHT = 2.5;
+
+    /** Pass score lost per unit of corner difficulty. Balance choice. */
+    public static final double PASS_CORNER_WEIGHT = 1.5;
+
+    /** Steepness k of the logistic curve that turns the pass score into a probability. Balance choice. */
+    public static final double PASS_LOGISTIC_K = 1.4;
+
+    /** Base chance an Attack goes wrong. Balance choice. */
+    public static final double RISK_BASE = 0.04;
+
+    /** Extra risk per unit of tire wear. */
+    public static final double RISK_PER_WEAR = 0.06;
+
+    /** Brake temperature above which hot brakes add risk, in Celsius. */
+    public static final double RISK_BRAKE_TEMP = 900.0;
+
+    /** Degrees above RISK_BRAKE_TEMP that add one whole unit of risk. */
+    public static final double RISK_BRAKE_SPAN = 1500.0;
+
+    /** Extra risk at a fully wet track. */
+    public static final double RISK_PER_WETNESS = 0.25;
+
+    /** Extra risk per unit of aggression above the middle (0.5). */
+    public static final double RISK_PER_AGGRESSION = 0.1;
+
+    /** Highest attack risk. */
+    public static final double RISK_MAX = 0.6;
+
+    /** Share of incidents that are lock-ups. */
+    public static final double INCIDENT_LOCKUP_SHARE = 0.5;
+
+    /** Share of incidents that are running wide (the rest are contact). */
+    public static final double INCIDENT_RUN_WIDE_SHARE = 0.35;
+
+    /** Time lost by a lock-up, in seconds. */
+    public static final double LOCKUP_TIME_LOSS = 0.4;
+
+    /** Time lost by running wide, in seconds. */
+    public static final double RUN_WIDE_TIME_LOSS = 1.2;
+
+    /** Time lost by the attacker in contact, in seconds. */
+    public static final double CONTACT_ATTACKER_LOSS = 1.5;
+
+    /** Time lost by the defender in contact, in seconds. */
+    public static final double CONTACT_DEFENDER_LOSS = 0.8;
+
+    /** Time a defender loses by taking the defensive line, attacked or not, in seconds. */
+    public static final double DEFEND_TIME_COST = 0.15;
+
+    /** Time an attacker loses when an attempted move fails cleanly, in seconds. */
+    public static final double FAILED_ATTACK_TIME_COST = 0.1;
+
+    /** Brake heat added by a late-braking attack, in Celsius. */
+    public static final double ATTACK_BRAKE_HEAT = 120.0;
+
+    /** Tire wear added by attacking. */
+    public static final double ATTACK_TIRE_WEAR = 0.01;
+
+    /** Tire wear added by defending. */
+    public static final double DEFEND_TIRE_WEAR = 0.004;
+
+    /** Battery charge spent when ERS is used in a battle. */
+    public static final double ERS_BATTLE_COST = 0.08;
+
+    /** Computer drivers use ERS in a battle while above this charge. */
+    public static final double AI_BATTLE_ERS_ABOVE = 0.3;
+
+    /** Speed fraction a car drives at while serving a time loss. */
+    public static final double PENALTY_SPEED_FRACTION = 0.7;
+
+    /** Sideways offset of the attacker while passing, in meters. */
+    public static final double PASS_LATERAL = 2.6;
+
+    /** Sideways offset of the defender while being passed, in meters (to the other side). */
+    public static final double DEFENDER_LATERAL = 1.0;
+
+    /** Sideways distance at which two cars no longer touch (car width plus a little), in meters. */
+    public static final double LATERAL_CLEARANCE = 2.2;
+
+    /** Extra speed fraction for the attacker during a pass. */
+    public static final double PASS_SPEED_BONUS = 0.04;
+
+    /** The attacker closes on the defender at least this fast during a pass, in m/s. */
+    public static final double PASS_MIN_CLOSING = 8.0;
+
+    /** Speed fraction the defender gives up while being passed. */
+    public static final double PASS_DEFENDER_SLOW = 0.04;
+
+    /** Lowest aggression drawn for a computer driver (narrow band, brief Section 3.11). */
+    public static final double AI_AGGRESSION_MIN = 0.4;
+
+    /** Highest aggression drawn for a computer driver. */
+    public static final double AI_AGGRESSION_MAX = 0.6;
+
+    /** Under this gap, default policies attack. */
+    public static final double DEFAULT_ATTACK_GAP = 0.6;
+
+    /** Under this gap, default policies defend. */
+    public static final double DEFAULT_DEFEND_GAP = 0.5;
+
+    /** Attack chance for a computer driver is its aggression times this, plus the bonuses below. */
+    public static final double AI_ATTACK_SCALE = 0.5;
+
+    /** Extra attack chance for a computer driver right behind. */
+    public static final double AI_CLOSE_ATTACK_BONUS = 0.25;
+
+    /** Extra attack chance per unit of tire-wear advantage. */
+    public static final double AI_TIRE_EDGE_WEIGHT = 1.5;
+
+    /** Attack chance removed when the attacker's tires are past the cliff. */
+    public static final double AI_WORN_TIRE_CAUTION = 0.3;
+
+    /** Chance a computer defender correctly reads a coming attack. */
+    public static final double AI_READ_ACCURACY = 0.7;
+
+    /** Chance a computer defender defends when no attack is coming. */
+    public static final double AI_FALSE_DEFEND = 0.15;
 
     /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
     public static final double PROFILE_GRIP_STEP = 0.004;

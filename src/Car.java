@@ -60,6 +60,33 @@ public final class Car {
     /** Sideways offset from the centerline in meters, positive to the left. */
     private double lateralOffset;
 
+    /** Sideways offset the car is moving toward, in meters. */
+    private double lateralTarget;
+
+    /**
+     * How willing a computer driver is to attack, drawn from a narrow random band each race.
+     * Not a rating of the real driver (the brief forbids invented ratings).
+     */
+    private double aggression = 0.5;
+
+    /** The stance a computer driver plans for its next corner, shown early as an attack warning. */
+    private Stance intent = Stance.HOLD;
+
+    /** Which corner (lap times 1000 plus corner number) the intent is for, or -1. */
+    private int intentKey = -1;
+
+    /** Which corner (lap times 1000 plus corner number) this car last battled at as attacker, or -1. */
+    private int lastBattleKey = -1;
+
+    /** The other car in a pass that is under way, or null. */
+    private Car passPartner;
+
+    /** True if this car is the one doing the passing. */
+    private boolean passAttacker;
+
+    /** Seconds of time still to be lost from an incident or a defensive line. */
+    private double timePenalty;
+
     /** Number of laps completed. */
     private int lapsCompleted;
 
@@ -121,6 +148,9 @@ public final class Car {
         double scale = paceFactor * pushLevel.getPace() * ers.boost();
         currentTopSpeed = Tuning.TOP_SPEED * scale;
         double target = profiles.forCarGrip(currentGrip).speedAt(distance) * scale;
+        if (timePenalty > 0) {
+            target *= Tuning.PENALTY_SPEED_FRACTION;
+        }
         return finished ? target * Tuning.COOL_DOWN_PACE : target;
     }
 
@@ -154,19 +184,148 @@ public final class Car {
     }
 
     /**
-     * Moves the car forward along the track and eases it back toward the racing line.
+     * Moves the car forward along the track and sideways toward its lateral target, and counts
+     * down any time penalty. Driving at a fraction f of normal speed loses (1 / f - 1) seconds
+     * for every second driven, which is how the penalty is used up.
      *
      * @param meters distance to move, never negative
      * @param dt time step in seconds
      */
     public void advance(double meters, double dt) {
         distance += meters;
-        double step = Tuning.LATERAL_RETURN_SPEED * dt;
-        if (Math.abs(lateralOffset) <= step) {
-            lateralOffset = 0;
+        double step = Tuning.LATERAL_SPEED * dt;
+        double toGo = lateralTarget - lateralOffset;
+        if (Math.abs(toGo) <= step) {
+            lateralOffset = lateralTarget;
         } else {
-            lateralOffset -= Math.signum(lateralOffset) * step;
+            lateralOffset += Math.signum(toGo) * step;
         }
+        if (timePenalty > 0) {
+            timePenalty -= dt * (1.0 / Tuning.PENALTY_SPEED_FRACTION - 1.0);
+        }
+    }
+
+    /**
+     * Starts a pass: this car and its partner move to opposite sides of the track.
+     *
+     * @param partner the other car in the pass
+     * @param attacking true if this car is the one passing
+     * @param lateral sideways offset to move to, in meters
+     */
+    public void beginPass(Car partner, boolean attacking, double lateral) {
+        passPartner = partner;
+        passAttacker = attacking;
+        lateralTarget = lateral;
+    }
+
+    /**
+     * Ends a pass and heads back to the racing line.
+     */
+    public void endPass() {
+        passPartner = null;
+        passAttacker = false;
+        lateralTarget = 0;
+    }
+
+    /**
+     * Adds time to lose, from an incident or a defensive line.
+     *
+     * @param seconds seconds to lose
+     */
+    public void addTimePenalty(double seconds) {
+        timePenalty += seconds;
+    }
+
+    /**
+     * Returns the other car in a pass under way.
+     *
+     * @return the partner, or null if not passing
+     */
+    public Car getPassPartner() {
+        return passPartner;
+    }
+
+    /**
+     * Returns whether this car is the one doing the passing.
+     *
+     * @return true for the attacker in a pass
+     */
+    public boolean isPassAttacker() {
+        return passAttacker;
+    }
+
+    /**
+     * Sets this race's aggression.
+     *
+     * @param value aggression from 0 to 1
+     */
+    public void setAggression(double value) {
+        aggression = value;
+    }
+
+    /**
+     * Returns this race's aggression.
+     *
+     * @return aggression from 0 to 1
+     */
+    public double getAggression() {
+        return aggression;
+    }
+
+    /**
+     * Sets the stance planned for a coming corner.
+     *
+     * @param stance the planned stance
+     * @param cornerKey lap times 1000 plus corner number
+     */
+    public void setIntent(Stance stance, int cornerKey) {
+        intent = stance;
+        intentKey = cornerKey;
+    }
+
+    /**
+     * Returns the planned stance.
+     *
+     * @return the stance
+     */
+    public Stance getIntent() {
+        return intent;
+    }
+
+    /**
+     * Returns which corner the planned stance is for.
+     *
+     * @return lap times 1000 plus corner number, or -1
+     */
+    public int getIntentKey() {
+        return intentKey;
+    }
+
+    /**
+     * Records the corner this car last battled at as attacker.
+     *
+     * @param cornerKey lap times 1000 plus corner number
+     */
+    public void setLastBattleKey(int cornerKey) {
+        lastBattleKey = cornerKey;
+    }
+
+    /**
+     * Returns the corner this car last battled at as attacker.
+     *
+     * @return lap times 1000 plus corner number, or -1
+     */
+    public int getLastBattleKey() {
+        return lastBattleKey;
+    }
+
+    /**
+     * Returns the grip this car had in the last step (tires times brake fade).
+     *
+     * @return grip multiplier
+     */
+    public double getCurrentGrip() {
+        return currentGrip;
     }
 
     /**

@@ -37,6 +37,27 @@ public final class RaceScreen {
     /** Car gauges on the right. */
     private final GaugePanel gauges;
 
+    /** Team radio on the right. */
+    private final RadioFeed radio;
+
+    /** The battle prompt. */
+    private final BattlePrompt prompt;
+
+    /** True while the prompt is on screen. */
+    private boolean promptShown;
+
+    /** The player battle the prompt is showing, or null. */
+    private Battle shownBattle;
+
+    /** Real seconds since the shown battle's prompt opened. */
+    private double promptClock;
+
+    /** Real seconds since the shown battle was resolved. */
+    private double resultClock;
+
+    /** Real seconds since time started easing back after a battle. */
+    private double easeClock = Tuning.BATTLE_EASE_BACK_SECONDS;
+
     /** F3 debug overlay. */
     private final DebugOverlay debug;
 
@@ -97,6 +118,13 @@ public final class RaceScreen {
         gauges.setLocation(width - GaugePanel.WIDTH - 8, HudPanel.TOP_BAR_BOTTOM + 10);
         program.add(gauges);
 
+        radio = new RadioFeed();
+        radio.setLocation(width - RadioFeed.WIDTH - 8, HudPanel.TOP_BAR_BOTTOM + GaugePanel.HEIGHT + 18);
+        program.add(radio);
+
+        prompt = new BattlePrompt();
+        prompt.setLocation(TimingTower.WIDTH + 24, HudPanel.TOP_BAR_BOTTOM + 8);
+
         debug = new DebugOverlay();
         debug.setLocation(width - 308, 8);
         render();
@@ -114,7 +142,7 @@ public final class RaceScreen {
             accumulator = 0;
             return 0;
         }
-        accumulator += realSeconds * Tuning.TIME_SPEEDS[speedIndex];
+        accumulator += realSeconds * effectiveSpeed(realSeconds);
         int steps = (int) Math.floor(accumulator / Tuning.SIM_STEP_SECONDS);
         if (steps > MAX_STEPS_PER_FRAME) {
             steps = MAX_STEPS_PER_FRAME;
@@ -126,11 +154,107 @@ public final class RaceScreen {
     }
 
     /**
+     * Works out this frame's time speed. While the player is deciding a battle, time runs at
+     * Tuning.BATTLE_SLOWDOWN; afterwards it eases back to the chosen speed. Also runs the prompt's
+     * countdown and locks the player's stance when time is up.
+     *
+     * @param realSeconds real time since the previous frame
+     * @return the speed multiplier for this frame
+     */
+    private double effectiveSpeed(double realSeconds) {
+        double chosen = Tuning.TIME_SPEEDS[speedIndex];
+        Battle battle = race.getBattles().getPlayerBattle();
+        if (battle != shownBattle) {
+            shownBattle = battle;
+            promptClock = 0;
+            resultClock = 0;
+        }
+        if (battle == null) {
+            easeClock += realSeconds;
+        } else if (!battle.isResolved()) {
+            promptClock += realSeconds;
+            if (promptClock >= Tuning.BATTLE_DECISION_SECONDS) {
+                battle.lockPlayerStance();
+            }
+            easeClock = 0;
+            return Math.min(chosen, Tuning.BATTLE_SLOWDOWN);
+        } else {
+            resultClock += realSeconds;
+            easeClock += realSeconds;
+            if (resultClock >= Tuning.BATTLE_RESULT_SECONDS) {
+                race.getBattles().clearPlayerBattle();
+            }
+        }
+        if (easeClock >= Tuning.BATTLE_EASE_BACK_SECONDS || chosen <= Tuning.BATTLE_SLOWDOWN) {
+            return chosen;
+        }
+        double t = easeClock / Tuning.BATTLE_EASE_BACK_SECONDS;
+        return Tuning.BATTLE_SLOWDOWN + (chosen - Tuning.BATTLE_SLOWDOWN) * t;
+    }
+
+    /**
+     * Shows, refreshes or hides the battle prompt.
+     */
+    private void updatePrompt() {
+        Battle battle = race.getBattles().getPlayerBattle();
+        if (battle == null) {
+            if (promptShown) {
+                program.remove(prompt);
+                promptShown = false;
+            }
+            return;
+        }
+        if (!promptShown) {
+            program.add(prompt);
+            promptShown = true;
+        }
+        if (battle.isResolved()) {
+            prompt.showResult(battle);
+        } else {
+            prompt.showOpen(battle, race, Tuning.BATTLE_DECISION_SECONDS - promptClock);
+        }
+    }
+
+    /**
+     * Finds the rival that is about to attack the player: the car right behind, within the intent
+     * gap, planning an Attack.
+     *
+     * @return the rival, or null
+     */
+    private Car warnedRival() {
+        Car player = race.getPlayerCar();
+        for (Car car : race.getCars()) {
+            if (car != player && car.getIntent() == Stance.ATTACK && race.carAheadOnTrack(car) == player
+                    && race.trackGap(car, player) < car.getSpeed() * Tuning.INTENT_GAP_SECONDS) {
+                return car;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Handles a mouse click: a stance button on the battle prompt.
+     *
+     * @param x x on the canvas
+     * @param y y on the canvas
+     */
+    public void handleClick(double x, double y) {
+        if (promptShown) {
+            Stance stance = prompt.stanceAt(x - prompt.getX(), y - prompt.getY());
+            if (stance != null) {
+                race.getBattles().choosePlayerStance(stance);
+            }
+        }
+    }
+
+    /**
      * Redraws everything from the current race state.
      */
     public void render() {
         camera.update(followed);
-        world.updateCars();
+        world.updateCars(warnedRival());
+        updatePrompt();
+        radio.update(race.getMessages());
         tower.update();
         miniMap.update();
         hud.update(followed, Tuning.TIME_SPEEDS[speedIndex], paused);
@@ -194,6 +318,15 @@ public final class RaceScreen {
                 break;
             case KeyEvent.VK_X:
                 race.getPlayerCar().setErsWanted(!race.getPlayerCar().isErsWanted());
+                break;
+            case KeyEvent.VK_A:
+                race.getBattles().choosePlayerStance(Stance.ATTACK);
+                break;
+            case KeyEvent.VK_S:
+                race.getBattles().choosePlayerStance(Stance.DEFEND);
+                break;
+            case KeyEvent.VK_D:
+                race.getBattles().choosePlayerStance(Stance.HOLD);
                 break;
             case KeyEvent.VK_F3:
                 toggleDebug();

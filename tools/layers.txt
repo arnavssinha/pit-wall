@@ -25,6 +25,16 @@ sim Ers.java
 sim ProfileSet.java
 sim TrackConditions.java
 sim QualifyingEntry.java
+sim Stance.java
+sim Corner.java
+sim Battle.java
+sim BattleOutcome.java
+sim BattleResolver.java
+sim BattleManager.java
+sim RaceMessage.java
+
+ai AiDriver.java
+ai DefaultStancePolicy.java
 
 data DataFiles.java
 data TrackLoader.java
@@ -43,3 +53,6 @@ ui Palette.java
 ui TrackDrawing.java
 ui GaugeBar.java
 ui GaugePanel.java
+ui UiButton.java
+ui BattlePrompt.java
+ui RadioFeed.java
