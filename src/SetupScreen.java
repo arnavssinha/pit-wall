@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 /**
  * The setup screen (brief, Section 3.3). The driver, team and grid slot are assigned at random by a
@@ -48,6 +49,12 @@ public final class SetupScreen implements Screen {
 
     /** Random seed of the race. */
     private long seed;
+
+    /** How many times the weather has been re-rolled for this seed. */
+    private int weatherRoll;
+
+    /** The race's weather, drawn from the track's statistics. */
+    private Forecast forecast;
 
     /** Number of cars. */
     private int carCount = Tuning.DEFAULT_CARS;
@@ -142,7 +149,7 @@ public final class SetupScreen implements Screen {
         p.add(Palette.background(w, manager.getHeight()));
         p.add(Palette.label("RACE SETUP  " + track.getProfile().getName().toUpperCase(Locale.ROOT),
                 Palette.HEADLINE, Palette.TEXT), 40, 52);
-        p.add(Palette.label("Enter: start race    Esc: back    R: re-roll driver and grid    U: undo strategy edit",
+        p.add(Palette.label("Enter: start race   Esc: back   R: re-roll driver and grid   V: re-roll weather   U: undo",
                 Palette.SMALL, Palette.TEXT_DIM), 42, 74);
 
         p.add(Palette.panel(560, 560), 40, 92);
@@ -158,6 +165,9 @@ public final class SetupScreen implements Screen {
         UiButton reroll = new UiButton("Re-roll  (R)", 180, 36);
         p.add(reroll, 56, 600);
         buttons.add(reroll, () -> reroll());
+        UiButton weatherButton = new UiButton("Re-roll weather  (V)", 220, 36);
+        p.add(weatherButton, 252, 600);
+        buttons.add(weatherButton, () -> rerollWeather());
 
         double x = 640;
         p.add(Palette.panel(w - x - 40, 560), x, 92);
@@ -214,6 +224,29 @@ public final class SetupScreen implements Screen {
      */
     private void rebuildRace() {
         race = new Race(new RaceConfig(carCount, Tuning.RACE_LAPS, seed), track, manager.getRoster());
+        drawForecast();
+        refresh();
+    }
+
+    /**
+     * Draws the race's weather from the track's statistics (a new draw for each seed and re-roll).
+     */
+    private void drawForecast() {
+        WeatherStats stats = manager.weatherFor(track.getProfile().getId());
+        if (stats == null) {
+            forecast = null;
+            return;
+        }
+        Random weatherRandom = new Random(seed * 1000 + weatherRoll);
+        forecast = ForecastGenerator.generate(stats, track.getProfile(), Tuning.RACE_LAPS, weatherRandom);
+    }
+
+    /**
+     * Draws new weather for the same driver and grid.
+     */
+    private void rerollWeather() {
+        weatherRoll++;
+        drawForecast();
         refresh();
     }
 
@@ -286,6 +319,9 @@ public final class SetupScreen implements Screen {
      * Hands the choices to the race and switches to the race screen.
      */
     private void startRace() {
+        if (forecast != null) {
+            race.applyForecast(forecast);
+        }
         race.setPlayerPlan(choice.toPlan(), push);
         manager.startRace(race);
     }
@@ -298,9 +334,7 @@ public final class SetupScreen implements Screen {
         Driver d = player.getDriver();
         assignment.setLabel(String.format(Locale.ROOT, "You are driving #%d %s for %s, starting P%d.",
                 d.getNumber(), d.getName(), d.getTeam().getName(), player.getGridPosition()));
-        TrackConditions c = race.getConditions();
-        conditionsLine.setLabel(String.format(Locale.ROOT, "Conditions: dry.  Track %.0f C, air %.0f C.  Seed %d.",
-                c.getTrackTemp(), c.getAirTemp(), seed));
+        conditionsLine.setLabel(forecastText(forecast) + "   Seed " + seed);
         List<QualifyingEntry> quali = race.getQualifying();
         int playerRow = player.getGridPosition() - 1;
         for (int i = 0; i < gridRows.length; i++) {
@@ -338,6 +372,23 @@ public final class SetupScreen implements Screen {
         for (int i = 0; i < pushButtons.size(); i++) {
             pushButtons.get(i).setHighlighted(PushLevel.values()[i] == push);
         }
+    }
+
+    /**
+     * Describes a forecast in one line, flagging approximate statistics.
+     *
+     * @param f the forecast, or null
+     * @return the text
+     */
+    public static String forecastText(Forecast f) {
+        if (f == null) {
+            return "Forecast: no weather statistics, neutral dry conditions.";
+        }
+        String rain = f.getShownLap() > 0
+                ? String.format(Locale.ROOT, "rain %.0f%%, around lap %d", f.getShownChance() * 100, f.getShownLap())
+                : String.format(Locale.ROOT, "rain %.0f%%", f.getShownChance() * 100);
+        return String.format(Locale.ROOT, "Forecast: track %.0f C, air %.0f C, %s%s", f.getTrackTemp(), f.getAirTemp(),
+                rain, f.isApproximate() ? " (APPROXIMATE weather data)" : "");
     }
 
     /**
@@ -381,6 +432,9 @@ public final class SetupScreen implements Screen {
                 break;
             case KeyEvent.VK_U:
                 undo();
+                break;
+            case KeyEvent.VK_V:
+                rerollWeather();
                 break;
             case KeyEvent.VK_Q:
                 choosePush(PushLevel.CONSERVE);

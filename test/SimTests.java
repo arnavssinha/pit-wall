@@ -64,6 +64,12 @@ public final class SimTests {
         check("pit stop: on the planned lap, new tires, 15-35 s lost", () -> testPitStop());
         check("two-compound rule disqualifies a no-stop car", () -> testCompoundRule());
         check("every strategy preset meets the two-compound rule", () -> testPresetsLegal());
+        check("forecasts follow the weather statistics", () -> testForecasts());
+        check("rain: track gets wet, AI fits rain tires, rule lifted", () -> testRainRace());
+        check("wetness grid: cells dry at different rates", () -> testUnevenDrying());
+        check("safety car: no passes, field bunches up", () -> testSafetyCar());
+        check("retirement: car stops, classified DNF, race ends", () -> testRetirement());
+        check("event queue hands out the earliest event first", () -> testEventQueue());
     }
 
     /**
@@ -286,7 +292,7 @@ public final class SimTests {
         for (int i = 1; i < order.size(); i++) {
             Car car = order.get(i);
             require(race.intervalToCarAhead(car) >= 0, "negative interval");
-            if (car.isFinished() || order.get(i - 1).isFinished() || race.lapsBehindLeader(car) > 0) {
+            if (car.isFinished() || car.isRetired() || order.get(i - 1).isFinished() || race.lapsBehindLeader(car) > 0) {
                 continue;
             }
             double gap = race.gapToLeader(car);
@@ -321,7 +327,8 @@ public final class SimTests {
                     }
                     double gap = race.trackGap(car, other);
                     if (gap < Tuning.MIN_SEPARATION - 1e-6) {
-                        boolean allowed = car.getPassPartner() == other || car.isInPitLane() != other.isInPitLane();
+                        boolean allowed = car.getPassPartner() == other || car.isOffTrack() != other.isOffTrack()
+                                || car.isRetired() || other.isRetired();
                         require(Race.sideBySide(car, other) && allowed,
                                 "overlap: " + car.getDriver().getCode() + " is " + gap + " m behind "
                                 + other.getDriver().getCode() + " without being alongside (pass or pit lane)");
@@ -345,6 +352,9 @@ public final class SimTests {
         require(winner.getLapsCompleted() == Tuning.RACE_LAPS, "winner completed " + winner.getLapsCompleted() + " laps");
         for (int i = 0; i < order.size(); i++) {
             Car car = order.get(i);
+            if (car.isRetired()) {
+                continue;
+            }
             require(car.getFinishPosition() == i + 1, "finish position mismatch at P" + (i + 1));
             require(car.getLapsCompleted() >= Tuning.RACE_LAPS - 1, car.getDriver().getCode() + " lap count wrong");
             if (i > 0) {
@@ -373,7 +383,7 @@ public final class SimTests {
     private static double[][] runStint(Compound compound, PushLevel push, int laps) {
         Track track = monza();
         ProfileSet profiles = new ProfileSet(track, LapCalibrator.gripScaleFor(track));
-        TrackConditions conditions = TrackConditions.neutral();
+        TrackConditions conditions = TrackConditions.neutral(track);
         Driver driver = new Driver(0, "TST", "Test driver", new Team("Test", "#FFFFFF"));
         Car car = new Car(0, driver, 1, 1.0, 0, 0, compound, false);
         car.setPushLevel(push);
@@ -649,7 +659,7 @@ public final class SimTests {
         require(race.getPlayerCar().isDisqualified(), "no-stop player should be disqualified");
         require(classification.get(classification.size() - 1) == race.getPlayerCar(), "disqualified car should be last");
         for (Car car : race.getCars()) {
-            if (!car.isPlayer()) {
+            if (!car.isPlayer() && !car.isRetired()) {
                 require(!car.isDisqualified(), car.getDriver().getCode() + " broke the rule");
                 require(car.getStopsMade() >= 1, car.getDriver().getCode() + " never stopped");
             }
@@ -664,5 +674,170 @@ public final class SimTests {
             require(preset.makePlan().usesTwoDryCompounds(), preset + " breaks the two-compound rule");
         }
         require(!new PitPlan(Compound.MEDIUM).usesTwoDryCompounds(), "a no-stop plan should fail the rule");
+    }
+
+    /**
+     * Draws many forecasts and checks the rain fraction matches the statistics and every value is in range.
+     */
+    private void testForecasts() {
+        WeatherStats stats;
+        try {
+            stats = WeatherStatsLoader.load().get("monza");
+        } catch (IOException e) {
+            throw new AssertionError("could not load weather: " + e.getMessage(), e);
+        }
+        require(stats != null, "no weather statistics for monza");
+        java.util.Random random = new java.util.Random(5);
+        int rainy = 0;
+        int draws = 4000;
+        for (int i = 0; i < draws; i++) {
+            Forecast f = ForecastGenerator.generate(stats, monza().getProfile(), Tuning.RACE_LAPS, random);
+            require(f.getAirTemp() >= Tuning.AIR_TEMP_MIN && f.getAirTemp() <= Tuning.AIR_TEMP_MAX, "air temp out of range");
+            require(f.getTrackTemp() >= f.getAirTemp() && f.getTrackTemp() <= Tuning.TRACK_TEMP_MAX, "track temp out of range");
+            require(f.getShownLap() >= 0 && f.getShownLap() <= Tuning.RACE_LAPS, "forecast lap out of range");
+            if (f.getRain() != null) {
+                rainy++;
+                require(f.getShownChance() >= Tuning.FORECAST_RAIN_LOW, "rain coming but forecast chance low");
+            }
+        }
+        double fraction = rainy / (double) draws;
+        System.out.printf("      rain in %.1f%% of forecasts (statistics say %.0f%%, approximate=%s)%n",
+                fraction * 100, stats.getRainChance() * 100, stats.isApproximate());
+        require(Math.abs(fraction - stats.getRainChance()) < 0.03, "rain fraction does not match statistics");
+    }
+
+    /**
+     * Runs a race with heavy rain from 2 to 7 minutes and checks the track gets wet, most computer
+     * cars switch to rain tires, and the race counts as wet so nobody is disqualified for one dry compound.
+     */
+    private void testRainRace() {
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 31L), monza(), roster());
+        race.setRain(new RainEvent(120, 300, 1.0));
+        double peakWetness = 0;
+        while (!race.isOver()) {
+            race.step();
+            peakWetness = Math.max(peakWetness, race.getConditions().averageWetness());
+        }
+        int rainTires = 0;
+        int running = 0;
+        for (Car car : race.getCars()) {
+            if (!car.isPlayer() && !car.isRetired()) {
+                running++;
+                if (car.usedRainTires()) {
+                    rainTires++;
+                }
+                require(!car.isDisqualified(), "nobody should be disqualified in a wet race");
+            }
+        }
+        System.out.printf("      peak wetness %.2f, %d of %d computer cars used rain tires%n", peakWetness, rainTires, running);
+        require(peakWetness > 0.6, "track never got properly wet");
+        require(race.isWetRace(), "race should count as wet");
+        require(rainTires >= running / 2, "most computer cars should switch to rain tires");
+    }
+
+    /**
+     * Soaks the track, lets it dry for a minute, and checks some parts are drier than others.
+     */
+    private void testUnevenDrying() {
+        Track track = monza();
+        TrackConditions conditions = new TrackConditions(track, 35, 25, new java.util.Random(3));
+        conditions.setWetness(1.0);
+        for (int i = 0; i < 60 * 60; i++) {
+            conditions.update(Tuning.SIM_STEP_SECONDS, 0);
+        }
+        double min = 1;
+        double max = 0;
+        for (int i = 0; i < track.getSampleCount(); i += 5) {
+            double w = conditions.wetnessAt(track.getSample(i).getDistance());
+            min = Math.min(min, w);
+            max = Math.max(max, w);
+        }
+        System.out.printf("      after 60 s of drying: wettest %.2f, driest %.2f%n", max, min);
+        require(max - min > 0.05, "all parts of the track dried at the same rate");
+        require(max < 1.0, "track did not dry at all");
+    }
+
+    /**
+     * Brings out the safety car early in a race and checks no passes happen while it is out and the
+     * cars that stay out (no pit stop under the safety car) close up. Cars that pit are left out of
+     * the spread, because a stop drops them back.
+     */
+    private void testSafetyCar() {
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 41L), monza(), roster());
+        Car victim = race.getCars().get(5) == race.getPlayerCar() ? race.getCars().get(6) : race.getCars().get(5);
+        double deployAt = 200;
+        race.scheduleSafetyCar(deployAt, victim);
+        while (race.getTime() < deployAt + 1) {
+            race.step();
+        }
+        require(race.getSafetyCar().isActive(), "safety car should be out");
+        int n = race.getCars().size();
+        double[] startDistance = new double[n];
+        int[] startStops = new int[n];
+        for (Car car : race.getCars()) {
+            startDistance[car.getId()] = car.getDistance();
+            startStops[car.getId()] = car.getStopsMade();
+        }
+        int passesBefore = race.getBattles().getPasses();
+        while (race.getSafetyCar().isActive()) {
+            race.step();
+        }
+        double firstBefore = -Double.MAX_VALUE;
+        double lastBefore = Double.MAX_VALUE;
+        double firstAfter = -Double.MAX_VALUE;
+        double lastAfter = Double.MAX_VALUE;
+        int stayedOut = 0;
+        for (Car car : race.getCars()) {
+            boolean stayed = !car.isRetired() && !car.isInPitLane() && car.getStopsMade() == startStops[car.getId()];
+            if (stayed) {
+                stayedOut++;
+                firstBefore = Math.max(firstBefore, startDistance[car.getId()]);
+                lastBefore = Math.min(lastBefore, startDistance[car.getId()]);
+                firstAfter = Math.max(firstAfter, car.getDistance());
+                lastAfter = Math.min(lastAfter, car.getDistance());
+            }
+        }
+        double before = firstBefore - lastBefore;
+        double after = firstAfter - lastAfter;
+        System.out.printf("      %d cars stayed out: spread %.0f m when the safety car came out, %.0f m when it went in%n",
+                stayedOut, before, after);
+        require(race.getBattles().getPasses() == passesBefore, "no passes allowed under the safety car");
+        require(stayedOut >= 5, "too few cars stayed out to judge");
+        require(after < before * 0.7, "field should bunch up behind the safety car");
+        require(victim.isRetired(), "the stopped car should be out of the race");
+    }
+
+    /**
+     * Retires a car mid-race and checks it parks, is classified behind the finishers, and the race ends.
+     */
+    private void testRetirement() {
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 51L), monza(), roster());
+        Car car = race.getCars().get(10) == race.getPlayerCar() ? race.getCars().get(11) : race.getCars().get(10);
+        race.scheduleRetirement(150, car);
+        runToEnd(race);
+        require(car.isRetired(), "car should have retired");
+        require(car.getSpeed() == 0, "retired car should have stopped");
+        List<Car> order = race.getClassification();
+        int finishers = 0;
+        for (Car c : order) {
+            if (!c.isRetired() && !c.isDisqualified()) {
+                finishers++;
+            }
+        }
+        require(order.indexOf(car) >= finishers, "retired car should be classified behind every finisher");
+    }
+
+    /**
+     * Adds events out of order and checks they come back earliest first, and only when due.
+     */
+    private void testEventQueue() {
+        EventQueue queue = new EventQueue();
+        queue.schedule(new RaceEvent(30, RaceEvent.Type.RAIN_STOP, null));
+        queue.schedule(new RaceEvent(10, RaceEvent.Type.RAIN_START, null));
+        queue.schedule(new RaceEvent(20, RaceEvent.Type.SAFETY_CAR_END, null));
+        require(queue.takeDue(5).isEmpty(), "nothing is due yet");
+        List<RaceEvent> due = queue.takeDue(25);
+        require(due.size() == 2 && due.get(0).getTime() == 10 && due.get(1).getTime() == 20, "wrong order or count");
+        require(queue.size() == 1 && queue.peek().getTime() == 30, "the last event should remain");
     }
 }

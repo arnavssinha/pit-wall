@@ -37,6 +37,12 @@ sim PitPlan.java
 sim PitPhase.java
 sim PitLane.java
 sim StrategyPreset.java
+sim RainEvent.java
+sim Forecast.java
+sim RaceEvent.java
+sim EventQueue.java
+sim SafetyCar.java
+sim RadioEngineer.java
 
 ai AiDriver.java
 ai DefaultStancePolicy.java
@@ -45,6 +51,9 @@ ai PitStrategyPlanner.java
 data DataFiles.java
 data TrackLoader.java
 data RosterLoader.java
+data WeatherStats.java
+data WeatherStatsLoader.java
+data ForecastGenerator.java
 
 ui PitWall.java
 ui RaceScreen.java

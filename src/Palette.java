@@ -22,6 +22,9 @@ public final class Palette {
     /** Gravel traps on the outside of corners. */
     public static final Color GRAVEL = new Color(196, 178, 132);
 
+    /** Track surface when soaked. */
+    public static final Color WET_ASPHALT = new Color(36, 46, 64);
+
     /** Pit lane surface. */
     public static final Color PIT_LANE = new Color(70, 74, 82);
 

@@ -89,7 +89,7 @@ public final class BattleManager {
      * @param car the car
      */
     private void updateIntent(Car car) {
-        if (car.isPlayer() || car.isFinished()) {
+        if (car.isPlayer() || car.isFinished() || car.isRetired()) {
             return;
         }
         Car ahead = race.carAheadOnTrack(car);
@@ -112,12 +112,15 @@ public final class BattleManager {
      * @param attacker the car that might attack
      */
     private void maybeOpen(Car attacker) {
+        if (race.getSafetyCar().isActive() || attacker.isRetired()) {
+            return;
+        }
         if (attacker.isFinished() || attacker.isInPitLane() || attacker.getPassPartner() != null
                 || attacker.getSpeed() < 1 || involved(attacker)) {
             return;
         }
         Car defender = race.carAheadOnTrack(attacker);
-        if (defender == null || defender.isInPitLane() || defender.getPassPartner() != null || involved(defender)) {
+        if (defender == null || defender.isOffTrack() || defender.getPassPartner() != null || involved(defender)) {
             return;
         }
         double gap = gapSeconds(attacker, defender);
@@ -343,6 +346,16 @@ public final class BattleManager {
         double atBraking = car.getDistance() + race.getTrack().wrap(corner.getBrakingPoint() - car.getDistance());
         int lap = (int) Math.floor(atBraking / race.getTrack().getLapLength());
         return lap * 1000 + corner.getNumber();
+    }
+
+    /**
+     * Calls off every open battle, for example when the safety car comes out (no overtaking).
+     */
+    public void cancelAll() {
+        open.clear();
+        if (playerBattle != null && !playerBattle.isResolved()) {
+            playerBattle = null;
+        }
     }
 
     /**

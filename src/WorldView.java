@@ -62,6 +62,15 @@ public final class WorldView extends GCompound {
     /** Converts track meters to drawing units. */
     private final transient TrackDrawing drawing;
 
+    /** Asphalt chunks, so their color can show wetness. */
+    private final transient List<GPolygon> asphaltChunks = new ArrayList<GPolygon>();
+
+    /** Lap distance at the middle of each asphalt chunk. */
+    private final transient List<Double> chunkMiddles = new ArrayList<Double>();
+
+    /** Wetness level (in tenths) each chunk is drawn at. */
+    private final transient List<Integer> chunkLevels = new ArrayList<Integer>();
+
     /** One sprite per car. */
     private final transient List<CarSprite> sprites = new ArrayList<CarSprite>();
 
@@ -383,8 +392,43 @@ public final class WorldView extends GCompound {
         double half = TrackDrawing.TRACK_WIDTH / 2;
         int n = drawing.getTrack().getSampleCount();
         for (int start = 0; start < n; start += CHUNK_SAMPLES) {
-            strip(start, start + CHUNK_SAMPLES + 1, -half, half, Palette.ASPHALT);
+            asphaltChunks.add(strip(start, start + CHUNK_SAMPLES + 1, -half, half, Palette.ASPHALT));
+            chunkMiddles.add(drawing.getTrack().getSample(start + CHUNK_SAMPLES / 2).getDistance());
+            chunkLevels.add(0);
         }
+    }
+
+    /**
+     * Darkens each asphalt chunk according to how wet that part of the track is, so the player can
+     * see where the track is still wet and where it has dried. Colors change in tenths to avoid
+     * repainting every frame.
+     *
+     * @param conditions the current weather
+     */
+    public void updateWetness(TrackConditions conditions) {
+        for (int i = 0; i < asphaltChunks.size(); i++) {
+            int level = (int) Math.round(conditions.wetnessAt(chunkMiddles.get(i)) * 10);
+            if (level != chunkLevels.get(i)) {
+                chunkLevels.set(i, level);
+                Color c = blend(Palette.ASPHALT, Palette.WET_ASPHALT, level / 10.0);
+                asphaltChunks.get(i).setFillColor(c);
+                asphaltChunks.get(i).setColor(c);
+            }
+        }
+    }
+
+    /**
+     * Mixes two colors.
+     *
+     * @param a first color
+     * @param b second color
+     * @param t share of the second color, from 0 to 1
+     * @return the mix
+     */
+    private static Color blend(Color a, Color b, double t) {
+        return new Color((int) (a.getRed() + (b.getRed() - a.getRed()) * t),
+                (int) (a.getGreen() + (b.getGreen() - a.getGreen()) * t),
+                (int) (a.getBlue() + (b.getBlue() - a.getBlue()) * t));
     }
 
     /**

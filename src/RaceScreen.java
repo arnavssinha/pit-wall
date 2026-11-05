@@ -287,7 +287,8 @@ public final class RaceScreen implements Screen {
         tower.update();
         miniMap.update();
         hud.update(followed, Tuning.TIME_SPEEDS[speedIndex], paused);
-        gauges.update(followed);
+        gauges.update(followed, race);
+        world.updateWetness(race.getConditions());
         hud.refreshBanner();
     }
 

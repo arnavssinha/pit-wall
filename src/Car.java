@@ -116,6 +116,9 @@ public final class Car {
     /** True if the car was disqualified (for example, for breaking the two-compound rule). */
     private boolean disqualified;
 
+    /** True if the car has retired from the race (mechanical failure or stopped on track). */
+    private boolean retired;
+
     /** Number of laps completed. */
     private int lapsCompleted;
 
@@ -178,6 +181,9 @@ public final class Car {
         currentGrip = tire.grip(conditions.wetnessAt(distance)) * brakes.fadeFactor();
         double scale = paceFactor * pushLevel.getPace() * ers.boost();
         currentTopSpeed = Tuning.TOP_SPEED * scale;
+        if (retired) {
+            return 0;
+        }
         double target = profiles.forCarGrip(currentGrip).speedAt(distance) * scale;
         if (timePenalty > 0) {
             target *= Tuning.PENALTY_SPEED_FRACTION;
@@ -440,6 +446,36 @@ public final class Car {
      */
     public boolean usedRainTires() {
         return usedCompounds.contains(Compound.INTERMEDIATE) || usedCompounds.contains(Compound.WET);
+    }
+
+    /**
+     * Retires the car: it pulls off the track to one side and stops.
+     *
+     * @param side +1 to pull off to the left, -1 to the right
+     */
+    public void retire(int side) {
+        retired = true;
+        pitRequest = 0;
+        setLateralTarget(side * Tuning.OFF_TRACK_OFFSET, Tuning.PIT_LATERAL_SPEED);
+    }
+
+    /**
+     * Returns whether the car has retired.
+     *
+     * @return true after a retirement
+     */
+    public boolean isRetired() {
+        return retired;
+    }
+
+    /**
+     * Returns whether the car is off the racing line for good reason: in the pit lane or retired.
+     * Such a car may be alongside a racing car once it is far enough to the side.
+     *
+     * @return true in the pit lane or when retired
+     */
+    public boolean isOffTrack() {
+        return retired || pitPhase != PitPhase.NONE;
     }
 
     /**

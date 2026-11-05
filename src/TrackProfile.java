@@ -34,6 +34,12 @@ public final class TrackProfile {
     /** Side of the track the pit lane is on: +1 left, -1 right (in the direction of travel). */
     private final int pitSide;
 
+    /** Chance that an incident brings out the safety car in one race, 0 to 1. */
+    private final double safetyCarProbability;
+
+    /** How changeable the weather is, 0 to 1; widens the rain forecast's error. */
+    private final double weatherVolatility;
+
     /** Difficulty label shown to the player. */
     private final String difficultyLabel;
 
@@ -56,13 +62,16 @@ public final class TrackProfile {
      * @param pitEntryDistance pit entry distance along the lap in meters
      * @param pitExitDistance pit exit distance along the lap in meters
      * @param pitSide +1 for a pit lane on the left, -1 on the right
+     * @param safetyCarProbability chance of a safety car per race
+     * @param weatherVolatility how changeable the weather is, 0 to 1
      * @param difficultyLabel difficulty label
      * @param description one-line description
      * @param dataSource note on where the data came from
      */
     public TrackProfile(String id, String name, String country, double lapLengthMeters,
                         double medianRaceLapSeconds, double trackWearMultiplier, double overtakingDifficulty,
-                        double pitEntryDistance, double pitExitDistance, int pitSide, String difficultyLabel, String description,
+                        double pitEntryDistance, double pitExitDistance, int pitSide,
+                        double safetyCarProbability, double weatherVolatility, String difficultyLabel, String description,
                         String dataSource) {
         this.id = id;
         this.name = name;
@@ -74,6 +83,8 @@ public final class TrackProfile {
         this.pitEntryDistance = pitEntryDistance;
         this.pitExitDistance = pitExitDistance;
         this.pitSide = pitSide;
+        this.safetyCarProbability = safetyCarProbability;
+        this.weatherVolatility = weatherVolatility;
         this.difficultyLabel = difficultyLabel;
         this.description = description;
         this.dataSource = dataSource;
@@ -167,6 +178,24 @@ public final class TrackProfile {
      */
     public int getPitSide() {
         return pitSide;
+    }
+
+    /**
+     * Returns the chance of a safety car per race.
+     *
+     * @return probability from 0 to 1
+     */
+    public double getSafetyCarProbability() {
+        return safetyCarProbability;
+    }
+
+    /**
+     * Returns how changeable the weather is.
+     *
+     * @return volatility from 0 to 1
+     */
+    public double getWeatherVolatility() {
+        return weatherVolatility;
     }
 
     /**

@@ -19,7 +19,7 @@ public final class RadioFeed extends GCompound {
     public static final double WIDTH = 258;
 
     /** Number of lines shown. */
-    private static final int LINES = 6;
+    private static final int LINES = 5;
 
     /** Height of one line in pixels. */
     private static final double LINE_HEIGHT = 30;

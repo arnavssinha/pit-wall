@@ -3,6 +3,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
@@ -28,6 +29,15 @@ public final class PitWall extends GraphicsProgram {
 
     /** Seconds the self-test spends at each time speed it measures. */
     private static final double SELFTEST_SECONDS_PER_SPEED = 5.0;
+
+    /** Race time when the self-test's rain starts, in seconds. */
+    private static final double SELFTEST_RAIN_START = 5.0;
+
+    /** How long the self-test's rain lasts, in seconds. */
+    private static final double SELFTEST_RAIN_SECONDS = 120.0;
+
+    /** Race time when a car stops in the self-test, bringing out the safety car. */
+    private static final double SELFTEST_SAFETY_CAR = 15.0;
 
     /** Marker in the input queue for a mouse click (no real key has this code). */
     private static final int CLICK = -1;
@@ -59,15 +69,17 @@ public final class PitWall extends GraphicsProgram {
         setBackground(Palette.SCREEN_BACK);
         List<Driver> roster;
         List<String> trackIds;
+        HashMap<String, WeatherStats> weather;
         try {
             roster = RosterLoader.load();
             trackIds = TrackLoader.listTrackIds();
+            weather = WeatherStatsLoader.load();
         } catch (IOException e) {
-            screens = new ScreenManager(this, getWidth(), getHeight(), null, null);
+            screens = new ScreenManager(this, getWidth(), getHeight(), null, null, null);
             screens.showError("Could not load game data: " + e.getMessage());
             return;
         }
-        screens = new ScreenManager(this, getWidth(), getHeight(), roster, trackIds);
+        screens = new ScreenManager(this, getWidth(), getHeight(), roster, trackIds, weather);
         addKeyListeners();
         addMouseListeners();
         getGCanvas().setFocusable(true);
@@ -119,12 +131,19 @@ public final class PitWall extends GraphicsProgram {
 
     /**
      * Races for a few seconds at 2x and then at 8x with the debug overlay on, prints the frame rate
-     * for each, and exits.
+     * for each, and exits. Rain and a safety car are scheduled early so the weather and incident
+     * code is exercised with drawing on.
      *
      * @param trackId the track to race on
      */
     private void runSelfTest(String trackId) {
         RaceScreen race = screens.startQuickRace(trackId, 1L);
+        Race sim = race.getRace();
+        sim.setRain(new RainEvent(SELFTEST_RAIN_START, SELFTEST_RAIN_SECONDS, 1.0));
+        Car stopper = sim.getCars().get(sim.getCars().size() - 1);
+        if (stopper != sim.getPlayerCar()) {
+            sim.scheduleSafetyCar(SELFTEST_SAFETY_CAR, stopper);
+        }
         race.showDebug();
         int[] speeds = {Tuning.DEFAULT_TIME_SPEED_INDEX, Tuning.TIME_SPEEDS.length - 1};
         for (int speedIndex : speeds) {

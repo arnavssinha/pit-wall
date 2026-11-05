@@ -29,6 +29,9 @@ public final class ScreenManager {
     /** Tracks already loaded, by id. */
     private final HashMap<String, Track> tracks = new HashMap<String, Track>();
 
+    /** Weather statistics by track id. */
+    private final HashMap<String, WeatherStats> weather;
+
     /** The screen on display. */
     private Screen current;
 
@@ -40,13 +43,26 @@ public final class ScreenManager {
      * @param height canvas height
      * @param roster every driver
      * @param trackIds available track ids
+     * @param weather weather statistics by track id
      */
-    public ScreenManager(GraphicsProgram program, double width, double height, List<Driver> roster, List<String> trackIds) {
+    public ScreenManager(GraphicsProgram program, double width, double height, List<Driver> roster,
+                         List<String> trackIds, HashMap<String, WeatherStats> weather) {
         this.program = program;
         this.width = width;
         this.height = height;
         this.roster = roster;
         this.trackIds = trackIds;
+        this.weather = weather;
+    }
+
+    /**
+     * Returns the weather statistics for a track.
+     *
+     * @param trackId the track
+     * @return the statistics, or null if there are none
+     */
+    public WeatherStats weatherFor(String trackId) {
+        return weather == null ? null : weather.get(trackId);
     }
 
     /**

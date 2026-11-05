@@ -39,6 +39,8 @@ public final class TrackLoader {
                 number(props, "pitEntryDistance", id),
                 number(props, "pitExitDistance", id),
                 (int) number(props, "pitSide", id),
+                number(props, "safetyCarProbability", id),
+                number(props, "weatherVolatility", id),
                 required(props, "difficultyLabel", id),
                 required(props, "description", id),
                 required(props, "dataSource", id));

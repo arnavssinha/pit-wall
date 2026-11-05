@@ -23,7 +23,22 @@ public final class Race {
     private final ProfileSet profiles;
 
     /** Current weather on track. */
-    private final TrackConditions conditions;
+    private TrackConditions conditions;
+
+    /** The rain that will fall this race, or null for a dry race. */
+    private RainEvent rain;
+
+    /** The forecast shown to the player, or null if none was applied. */
+    private Forecast forecast;
+
+    /** Scheduled events (rain, incidents, retirements), earliest first. */
+    private final EventQueue events = new EventQueue();
+
+    /** The safety car. */
+    private final SafetyCar safetyCar = new SafetyCar();
+
+    /** The player's race engineer, who sends radio messages. */
+    private final RadioEngineer engineer;
 
     /** The one random number generator for this race. */
     private final Random random;
@@ -99,7 +114,8 @@ public final class Race {
         this.track = track;
         this.random = new Random(config.getSeed());
         this.profiles = new ProfileSet(track, LapCalibrator.gripScaleFor(track));
-        this.conditions = TrackConditions.neutral();
+        this.conditions = new TrackConditions(track, Tuning.NEUTRAL_TRACK_TEMP, Tuning.NEUTRAL_AIR_TEMP, random);
+        this.engineer = new RadioEngineer(this);
         this.corners = Corner.findAll(track, profiles.forCarGrip(Compound.MEDIUM.getDryGrip()));
         this.battles = new BattleManager(this, random);
         this.pitLane = new PitLane(this, random);
@@ -127,6 +143,7 @@ public final class Race {
             }
         }
         playerCar = player;
+        scheduleIncidents();
 
         lapTimes = new double[cars.size()][config.getLaps()];
         wearHistory = new double[cars.size()][config.getLaps()];
@@ -169,11 +186,13 @@ public final class Race {
                 car.setPushLevel(AiDriver.choosePush(car));
             }
         }
-        battles.beforeMove();
-        pitLane.beforeMove();
-        if (conditions.wetnessAt(0) > Tuning.SLICK_WET_CLIFF) {
+        handleEvents();
+        conditions.update(dt, rain == null ? 0 : rain.intensityAt(time));
+        if (conditions.averageWetness() > Tuning.SLICK_WET_CLIFF) {
             wetRace = true;
         }
+        battles.beforeMove();
+        pitLane.beforeMove();
         double[] moves = new double[n];
         for (int i = 0; i < n; i++) {
             moves[i] = planMove(cars.get(i), dt);
@@ -189,6 +208,152 @@ public final class Race {
         time += dt;
         Collections.sort(standings, Race::compareStandings);
         battles.afterMove();
+        engineer.update();
+    }
+
+    /**
+     * Rolls this race's incidents at the start and puts them in the event queue: possibly a car
+     * stopping on track (which brings out the safety car), and rare mechanical retirements.
+     */
+    private void scheduleIncidents() {
+        double lap = track.getProfile().getMedianRaceLapSeconds();
+        double first = (Tuning.INCIDENT_FIRST_LAP - 1) * lap;
+        double span = (Tuning.INCIDENT_LAST_LAP - Tuning.INCIDENT_FIRST_LAP + 1) * lap;
+        if (random.nextDouble() < track.getProfile().getSafetyCarProbability()) {
+            Car victim = cars.get(random.nextInt(cars.size()));
+            if (victim != playerCar) {
+                events.schedule(new RaceEvent(first + random.nextDouble() * span, RaceEvent.Type.SAFETY_CAR, victim));
+            }
+        }
+        for (Car car : cars) {
+            if (random.nextDouble() < Tuning.RETIREMENT_CHANCE) {
+                events.schedule(new RaceEvent(first + random.nextDouble() * span, RaceEvent.Type.RETIREMENT, car));
+            }
+        }
+    }
+
+    /**
+     * Handles every scheduled event that is due.
+     */
+    private void handleEvents() {
+        for (RaceEvent event : events.takeDue(time)) {
+            Car car = event.getCar();
+            switch (event.getType()) {
+                case RAIN_START:
+                    addMessage("Rain is starting!", true);
+                    break;
+                case RAIN_STOP:
+                    addMessage("Rain has stopped. The track will start to dry.", true);
+                    break;
+                case SAFETY_CAR:
+                    if (retire(car, "has stopped on track")) {
+                        events.schedule(new RaceEvent(time + Tuning.SC_DEPLOY_DELAY + Tuning.SC_DURATION_SECONDS,
+                                RaceEvent.Type.SAFETY_CAR_END, null));
+                        safetyCar.deploy();
+                        battles.cancelAll();
+                        addMessage("SAFETY CAR deployed. A pit stop is cheap now.", true);
+                    }
+                    break;
+                case SAFETY_CAR_END:
+                    safetyCar.end();
+                    addMessage("Safety car is in. Green flag, racing resumes!", true);
+                    break;
+                default:
+                    retire(car, "retires with a mechanical failure");
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Retires a car if it is still racing on track (cars in the pit lane or already finished are left alone).
+     *
+     * @param car the car
+     * @param reason the end of the radio message, such as "has stopped on track"
+     * @return true if the car was retired
+     */
+    private boolean retire(Car car, String reason) {
+        if (car.isFinished() || car.isRetired() || car.isInPitLane() || car.getPassPartner() != null) {
+            return false;
+        }
+        car.retire(-track.getProfile().getPitSide());
+        addMessage((car.isPlayer() ? "Your car" : car.getDriver().getCode()) + " " + reason + ".", true);
+        return true;
+    }
+
+    /**
+     * Applies a forecast before the start: sets the temperatures and schedules any rain.
+     *
+     * @param forecast the forecast
+     * @throws IllegalStateException if the race has already started
+     */
+    public void applyForecast(Forecast forecast) {
+        if (time > 0) {
+            throw new IllegalStateException("The weather can only be set before the start");
+        }
+        this.forecast = forecast;
+        conditions = new TrackConditions(track, forecast.getTrackTemp(), forecast.getAirTemp(), random);
+        setRain(forecast.getRain());
+    }
+
+    /**
+     * Sets the rain for this race and schedules its start and stop messages.
+     *
+     * @param spell the rain, or null for a dry race
+     */
+    public void setRain(RainEvent spell) {
+        rain = spell;
+        if (spell != null) {
+            events.schedule(new RaceEvent(spell.getStart(), RaceEvent.Type.RAIN_START, null));
+            events.schedule(new RaceEvent(spell.getEnd(), RaceEvent.Type.RAIN_STOP, null));
+        }
+    }
+
+    /**
+     * Schedules a car to stop on track at a given time, bringing out the safety car (for tests and scenarios).
+     *
+     * @param when race time in seconds
+     * @param car the car that stops
+     */
+    public void scheduleSafetyCar(double when, Car car) {
+        events.schedule(new RaceEvent(when, RaceEvent.Type.SAFETY_CAR, car));
+    }
+
+    /**
+     * Schedules a mechanical retirement (for tests and scenarios).
+     *
+     * @param when race time in seconds
+     * @param car the car that retires
+     */
+    public void scheduleRetirement(double when, Car car) {
+        events.schedule(new RaceEvent(when, RaceEvent.Type.RETIREMENT, car));
+    }
+
+    /**
+     * Returns the forecast shown to the player.
+     *
+     * @return the forecast, or null if none was applied
+     */
+    public Forecast getForecast() {
+        return forecast;
+    }
+
+    /**
+     * Returns the rain for this race.
+     *
+     * @return the rain spell, or null for a dry race
+     */
+    public RainEvent getRain() {
+        return rain;
+    }
+
+    /**
+     * Returns the safety car.
+     *
+     * @return the safety car
+     */
+    public SafetyCar getSafetyCar() {
+        return safetyCar;
     }
 
     /**
@@ -203,14 +368,17 @@ public final class Race {
      */
     private double planMove(Car car, double dt) {
         double target = Math.min(car.targetSpeed(profiles, conditions), pitLane.speedLimit(car));
+        Car ahead = blockingCarAhead(car);
+        double gap = ahead == null ? Double.MAX_VALUE : trackGap(car, ahead);
+        if (!car.isInPitLane()) {
+            target *= safetyCar.paceFactor(car == leader(), gap);
+        }
         Car partner = car.getPassPartner();
         if (partner != null && car.isPassAttacker()) {
             target = Math.max(target * (1 + Tuning.PASS_SPEED_BONUS), partner.getSpeed() + Tuning.PASS_MIN_CLOSING);
         } else if (partner != null) {
             target *= 1 - Tuning.PASS_DEFENDER_SLOW;
         }
-        Car ahead = blockingCarAhead(car);
-        double gap = ahead == null ? Double.MAX_VALUE : trackGap(car, ahead);
         double tow = slipstreamFactor(gap, car.getSpeed(), onStraight(car));
         if (tow > 1.0) {
             target *= tow;
@@ -281,13 +449,17 @@ public final class Race {
      * @return true to deploy on straights
      */
     private boolean wantsDeploy(Car car) {
+        if (safetyCar.isActive()) {
+            return false;
+        }
         return car.isPlayer() ? car.isErsWanted() : AiDriver.wantsDeploy(car);
     }
 
     /**
      * Finds the car that limits how far a car may move: the nearest car ahead on the road, except a
      * car that is far enough to the side to be alongside safely, which is allowed only for a passing
-     * partner, or for one car in the pit lane next to one on track (two pit-lane cars queue).
+     * partner, for one car off the racing line (pit lane or retired) next to one on it, and for any
+     * car next to a retired car parked at the side.
      *
      * @param car the car
      * @return the blocking car, or null
@@ -296,7 +468,8 @@ public final class Race {
         Car best = null;
         double bestGap = Double.MAX_VALUE;
         for (Car other : cars) {
-            boolean mayBeAlongside = other == car.getPassPartner() || car.isInPitLane() != other.isInPitLane();
+            boolean mayBeAlongside = other == car.getPassPartner() || car.isOffTrack() != other.isOffTrack()
+                    || car.isRetired() || other.isRetired();
             if (other == car || (mayBeAlongside && sideBySide(car, other))) {
                 continue;
             }
@@ -411,7 +584,7 @@ public final class Race {
         }
         double lap = track.getLapLength();
         long line = (long) Math.floor(before / lap) + 1;
-        if (line >= 1 && line * lap <= after && !car.isFinished()) {
+        if (line >= 1 && line * lap <= after && !car.isFinished() && !car.isRetired()) {
             double crossTime = time + dt * (line * lap - before) / move;
             car.completeLap(crossTime);
             int lapIndex = car.getLapsCompleted() - 1;
@@ -441,14 +614,20 @@ public final class Race {
     }
 
     /**
-     * Returns the final classification: finishing order, with disqualified cars moved to the end.
+     * Returns the final classification: finishers in order, then retired cars (DNF), then
+     * disqualified cars.
      *
      * @return cars in classified order
      */
     public List<Car> getClassification() {
         List<Car> result = new ArrayList<Car>();
         for (Car car : standings) {
-            if (!car.isDisqualified()) {
+            if (!car.isDisqualified() && !car.isRetired()) {
+                result.add(car);
+            }
+        }
+        for (Car car : standings) {
+            if (car.isRetired() && !car.isDisqualified()) {
                 result.add(car);
             }
         }
@@ -476,6 +655,15 @@ public final class Race {
     }
 
     /**
+     * Returns the race leader among cars still running.
+     *
+     * @return the first car in the standings
+     */
+    private Car leader() {
+        return standings.get(0);
+    }
+
+    /**
      * Returns whether the race counts as wet (the two-compound rule no longer applies).
      *
      * @return true once the track has been properly wet
@@ -485,14 +673,17 @@ public final class Race {
     }
 
     /**
-     * Orders two cars for the standings: finished cars by finishing position first,
-     * then everyone else by distance driven (furthest first).
+     * Orders two cars for the standings: retired cars go to the back; finished cars come first by
+     * finishing position; everyone else is ordered by distance driven (furthest first).
      *
      * @param a first car
      * @param b second car
      * @return negative if a is ahead of b, positive if behind
      */
     private static int compareStandings(Car a, Car b) {
+        if (a.isRetired() != b.isRetired()) {
+            return a.isRetired() ? 1 : -1;
+        }
         if (a.isFinished() && b.isFinished()) {
             return Integer.compare(a.getFinishPosition(), b.getFinishPosition());
         }
@@ -584,7 +775,13 @@ public final class Race {
      * @return true when the race is over
      */
     public boolean isOver() {
-        return finishedCount == cars.size();
+        int retired = 0;
+        for (Car car : cars) {
+            if (car.isRetired()) {
+                retired++;
+            }
+        }
+        return finishedCount + retired == cars.size();
     }
 
     /**

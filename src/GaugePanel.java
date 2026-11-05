@@ -20,7 +20,7 @@ public final class GaugePanel extends GCompound {
     public static final double WIDTH = 258;
 
     /** Panel height in pixels. */
-    public static final double HEIGHT = 222;
+    public static final double HEIGHT = 262;
 
     /** Lowest tire temperature on the gauge, in Celsius. */
     private static final double TIRE_MIN = 40;
@@ -67,6 +67,12 @@ public final class GaugePanel extends GCompound {
     /** ERS deploy status line. */
     private final GLabel ersLine;
 
+    /** Track wetness where the car is. */
+    private final GaugeBar wetGauge;
+
+    /** Rain forecast or status line. */
+    private final GLabel weatherLine;
+
     /** Compound whose window is currently drawn on the tire gauge. */
     private Compound shownCompound;
 
@@ -102,7 +108,9 @@ public final class GaugePanel extends GCompound {
         brakeTemp = gauge("Brakes", BRAKE_MIN, BRAKE_MAX, true, 146);
         brakeTemp.setBand(Tuning.BRAKE_GOOD_LOW, Tuning.BRAKE_FADE_TEMP);
         battery = gauge("ERS", 0, 1, false, 170);
-        ersLine = label("", 12, 208, Palette.SMALL, Palette.TEXT_DIM);
+        ersLine = label("", 12, 206, Palette.SMALL, Palette.TEXT_DIM);
+        wetGauge = gauge("Wetness", 0, 1, false, 216);
+        weatherLine = label("", 12, 250, Palette.SMALL, Palette.TEXT_DIM);
     }
 
     /**
@@ -141,11 +149,16 @@ public final class GaugePanel extends GCompound {
     }
 
     /**
-     * Refreshes every gauge from a car.
+     * Refreshes every gauge from a car and the race's weather.
      *
      * @param car the car to show
+     * @param race the race, for the weather and forecast
      */
-    public void update(Car car) {
+    public void update(Car car, Race race) {
+        double wet = race.getConditions().wetnessAt(car.getDistance());
+        Color wetColor = wet > Tuning.SLICK_WET_CLIFF ? Palette.ERS : Palette.TEXT_DIM;
+        wetGauge.setValue(wet, String.format(Locale.ROOT, "%.0f%%", wet * 100), wetColor);
+        setText(weatherLine, weatherText(race));
         String who = car.isPlayer() ? "YOUR CAR" : "RIVAL";
         setText(title, String.format(Locale.ROOT, "%s  #%d %s", who, car.getDriver().getNumber(), car.getDriver().getCode()));
 
@@ -183,6 +196,26 @@ public final class GaugePanel extends GCompound {
         String deploy = ers.isDeploying() ? "DEPLOYING" : "harvesting";
         String mode = car.isPlayer() ? "   X deploy: " + (car.isErsWanted() ? "ON" : "OFF") : "";
         setText(ersLine, deploy + mode);
+    }
+
+    /**
+     * Describes the weather: raining now, rain on the way (with a countdown from the forecast), or dry.
+     *
+     * @param race the race
+     * @return one line of text
+     */
+    private static String weatherText(Race race) {
+        TrackConditions c = race.getConditions();
+        if (c.getRainIntensity() > Tuning.DRIZZLE) {
+            return String.format(Locale.ROOT, "RAINING (%.0f%%)  track %.0f C", c.getRainIntensity() * 100, c.getTrackTemp());
+        }
+        Forecast f = race.getForecast();
+        int lap = race.getLeaderLap();
+        if (f != null && f.getShownLap() > lap) {
+            return String.format(Locale.ROOT, "Rain %.0f%% in ~%d laps  track %.0f C", f.getShownChance() * 100,
+                    f.getShownLap() - lap, c.getTrackTemp());
+        }
+        return String.format(Locale.ROOT, "Dry  track %.0f C  air %.0f C", c.getTrackTemp(), c.getAirTemp());
     }
 
     /**

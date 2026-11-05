@@ -46,6 +46,9 @@ public final class PitStrategyPlanner {
         }
         int raceLaps = race.getConfig().getLaps();
         int currentLap = car.getLapsCompleted() + 1;
+        if (!car.isPlayer() && currentLap < raceLaps && weatherCall(car, race.getConditions().averageWetness())) {
+            return;
+        }
         PitPlan plan = car.getPlan();
         PitStop next = plan.nextStop();
         while (next != null && next.getLap() >= raceLaps) {
@@ -67,6 +70,31 @@ public final class PitStrategyPlanner {
             Compound fresh = next != null ? next.getCompound() : otherDryCompound(car.getTire().getCompound());
             car.requestPit(1, fresh);
         }
+    }
+
+    /**
+     * Calls a stop for a computer driver whose tires do not suit the track's wetness: slicks on a
+     * wet track, Intermediates in heavy rain, or rain tires on a drying track.
+     *
+     * @param car the computer car
+     * @param wetness average track wetness
+     * @return true if a stop was called
+     */
+    private static boolean weatherCall(Car car, double wetness) {
+        Compound now = car.getTire().getCompound();
+        Compound wanted = null;
+        if (now.isDry() && wetness > Tuning.SLICK_WET_CLIFF) {
+            wanted = wetness > Tuning.AI_WET_WETNESS ? Compound.WET : Compound.INTERMEDIATE;
+        } else if (now == Compound.INTERMEDIATE && wetness > Tuning.AI_WET_WETNESS) {
+            wanted = Compound.WET;
+        } else if (!now.isDry() && wetness < Tuning.AI_DRY_WETNESS) {
+            wanted = Compound.MEDIUM;
+        }
+        if (wanted == null) {
+            return false;
+        }
+        car.requestPit(1, wanted);
+        return true;
     }
 
     /**

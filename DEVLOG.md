@@ -160,3 +160,31 @@ no-stop car, every computer car legal, presets legal). Self-test 59.5 FPS with a
 flow Menu, Track Select, Setup, Race and a pit stop were checked with screenshots.
 
 **Next:** M6, weather and events.
+
+## M6 Weather and events (2026-11-05)
+
+**Done**
+- Weather statistics: `WeatherStatsLoader` reads `data/weather_stats.csv` (real export) if present,
+  otherwise `data/fallback_weather.csv`, which holds APPROXIMATE values (owner approved; flagged in the
+  file, the README and on the setup screen).
+- `ForecastGenerator`: temperatures from clamped normal distributions, rain with the track's rain chance;
+  the forecast shown is uncertain (a percentage, and a start lap that can be off by a lap or two).
+- `TrackConditions`: wetness grid (double[][] of 150 m cells) plus a per-cell drying-rate grid, so some
+  corners dry before others; wetness lags the rain. Wet asphalt is drawn darker.
+- `EventQueue` (PriorityQueue of `RaceEvent`): rain start and stop, a car stopping on track (safety car),
+  safety car in, mechanical retirements. `SafetyCar`: 60 percent pace, catch-up for cars far behind, no
+  battles; pit stops become cheap. Retired cars park off the track and are classified DNF.
+- `RadioEngineer`: tire temperature and wear, brake fade, flat battery, rival closing, rain coming,
+  wet or drying track; a per-topic cooldown in a HashMap stops repeats.
+- Computer drivers fit Intermediates or Wets on a wet track and slicks again when it dries. A wet race
+  lifts the two-compound rule.
+- Setup shows the forecast with a weather re-roll (V); gauges show wetness and a rain countdown.
+- Not done from the brief's table: a separate surface-type grid (asphalt, kerb, grass, pit). Nothing in
+  the simulation needs it, so it would be decorative; dropped as the brief allows.
+
+**Verified:** 29/29 tests, including forecast statistics (rain in 12.8 percent of 4000 draws vs 15 percent),
+a rain race (all running computer cars switched to rain tires, no disqualifications), uneven drying, safety
+car (no passes; the cars that stayed out closed from 1259 m to 593 m), retirement (DNF, race ends), event
+order. The self-test now includes early rain and a safety car: 59.3 FPS, no exceptions.
+
+**Next:** M7, results screen and Strategy Lab.

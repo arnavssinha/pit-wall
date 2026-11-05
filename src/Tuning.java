@@ -341,6 +341,114 @@ public final class Tuning {
     /** Computer drivers make an unplanned stop at this tire wear. Balance choice. */
     public static final double AI_EMERGENCY_WEAR = 0.97;
 
+    /** Seconds for rain to build to its peak, and to fade away again. */
+    public static final double RAIN_RAMP_SECONDS = 40.0;
+
+    /** Coldest air temperature a forecast may give, in Celsius. */
+    public static final double AIR_TEMP_MIN = 5.0;
+
+    /** Hottest air temperature a forecast may give, in Celsius. */
+    public static final double AIR_TEMP_MAX = 42.0;
+
+    /** Coldest track temperature a forecast may give, in Celsius. */
+    public static final double TRACK_TEMP_MIN = 10.0;
+
+    /** Hottest track temperature a forecast may give, in Celsius. */
+    public static final double TRACK_TEMP_MAX = 60.0;
+
+    /** Earliest lap rain may start. Balance choice. */
+    public static final int RAIN_FIRST_LAP = 2;
+
+    /** Shortest spell of rain, in laps. Balance choice. */
+    public static final double RAIN_MIN_LAPS = 1.5;
+
+    /** Longest spell of rain, in laps. Balance choice. */
+    public static final double RAIN_MAX_LAPS = 4.0;
+
+    /** Lightest peak rain intensity. Balance choice. */
+    public static final double RAIN_MIN_PEAK = 0.35;
+
+    /** Lowest chance the forecast shows when rain really is coming. */
+    public static final double FORECAST_RAIN_LOW = 0.55;
+
+    /** Highest chance the forecast shows when rain really is coming. */
+    public static final double FORECAST_RAIN_HIGH = 0.9;
+
+    /** Highest chance the forecast shows when no rain is coming (a false alarm). */
+    public static final double FORECAST_FALSE_ALARM = 0.4;
+
+    /** Above this shown chance, the forecast also names a lap. */
+    public static final double FORECAST_SHOW_LAP_ABOVE = 0.25;
+
+    /** Forecast lap error (standard deviation, in laps) on a fully changeable track. */
+    public static final double FORECAST_LAP_ERROR = 3.0;
+
+    /** Size of a wetness grid cell, in meters. */
+    public static final double WETNESS_CELL_METERS = 150.0;
+
+    /** How much cells' drying rates differ from average, as a fraction (shade, drainage). Balance choice. */
+    public static final double DRYING_VARIATION = 0.4;
+
+    /** Seconds of full-intensity rain to soak a dry track. Balance choice. */
+    public static final double WETTING_SECONDS = 90.0;
+
+    /** Seconds for a soaked cell to dry at the neutral track temperature. Balance choice. */
+    public static final double DRYING_SECONDS = 300.0;
+
+    /** Rain lighter than this lets the track dry. */
+    public static final double DRIZZLE = 0.05;
+
+    /** Every this many samples is checked when averaging wetness over the lap. */
+    public static final int WETNESS_AVERAGE_STRIDE = 10;
+
+    /** Chance of a mechanical retirement per car per race. Balance choice. */
+    public static final double RETIREMENT_CHANCE = 0.01;
+
+    /** Earliest lap for a scheduled incident. */
+    public static final int INCIDENT_FIRST_LAP = 2;
+
+    /** Latest lap for a scheduled incident. */
+    public static final int INCIDENT_LAST_LAP = 8;
+
+    /** Seconds after a car stops before the safety car is out. */
+    public static final double SC_DEPLOY_DELAY = 3.0;
+
+    /** Seconds the safety car stays out. Balance choice (about two slow laps). */
+    public static final double SC_DURATION_SECONDS = 150.0;
+
+    /** Speed fraction under the safety car. Balance choice. */
+    public static final double SC_PACE = 0.6;
+
+    /** Speed fraction for a car catching up to the queue under the safety car. */
+    public static final double SC_CATCH_UP_PACE = 0.8;
+
+    /** Under the safety car, a car further than this behind the car ahead may catch up, in meters. */
+    public static final double SC_BUNCH_GAP = 60.0;
+
+    /** How far off the track a retired car parks, in meters from the centerline. */
+    public static final double OFF_TRACK_OFFSET = 13.0;
+
+    /** Computer drivers on slicks fit Wets (not Intermediates) above this wetness. */
+    public static final double AI_WET_WETNESS = 0.7;
+
+    /** Computer drivers on rain tires go back to slicks below this wetness. */
+    public static final double AI_DRY_WETNESS = 0.2;
+
+    /** Seconds between the engineer's checks. */
+    public static final double RADIO_CHECK_SECONDS = 0.5;
+
+    /** Seconds before the engineer repeats a topic. */
+    public static final double RADIO_TOPIC_COOLDOWN = 25.0;
+
+    /** Degrees outside the tire window before the engineer mentions it. */
+    public static final double RADIO_TEMP_MARGIN = 5.0;
+
+    /** The engineer warns about a rival closing within this gap, in seconds. */
+    public static final double RADIO_RIVAL_GAP = 1.0;
+
+    /** The engineer warns about rain this many laps before it starts. */
+    public static final int RADIO_RAIN_WARN_LAPS = 2;
+
     /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
     public static final double PROFILE_GRIP_STEP = 0.004;
 

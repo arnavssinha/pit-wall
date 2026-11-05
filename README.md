@@ -52,7 +52,11 @@ you make the strategy calls.
 2. **The race.** The car drives itself. Watch the gauges and adjust the push level (Q/W/E). When a rival
    is close at a braking zone, time slows down and you choose Attack, Defend or Hold (A/S/D).
    A red triangle over a rival means they are about to attack you.
-3. **Pit stops.** Your plan calls its stops automatically (the radio tells you). Press B to cancel or to
+3. **Weather and incidents.** The setup screen shows a forecast (press V for different weather). Rain
+   wets the track gradually and some corners dry before others; slicks fall off a cliff on a wet track.
+   A car stopping on track brings out the safety car: no overtaking, the field bunches up, and a pit stop
+   costs less time. Cars can also retire with mechanical failures. Your engineer warns you on the radio.
+4. **Pit stops.** Your plan calls its stops automatically (the radio tells you). Press B to cancel or to
    box early, N to box next lap, and 1-5 to change the tires. In a dry race you must use two different
    dry compounds or you are disqualified.
 
@@ -64,6 +68,12 @@ you make the strategy calls.
 - **Monza lap length (5793 m)** is the official circuit length.
 - **Monza target race lap (85.0 s)** is an approximate figure, flagged as such in
   `data/tracks/monza.properties`. It will be replaced by a median computed from FastF1 race laps.
+- **Weather: APPROXIMATE.** `data/fallback_weather.csv` holds rough temperatures and a rain chance for
+  each track from general knowledge of the race weekend, because the FastF1 export could not run yet.
+  It is not measured data, and the setup screen says "APPROXIMATE weather data" while it is in use.
+  When `data/weather_stats.csv` (from `tools/export_data.py`) exists, the game uses it instead.
+- **Safety car chance, overtaking difficulty, tire wear and weather volatility per track** are balance
+  choices, marked as such in each track's properties file.
 - **Driver roster** (`data/roster.csv`) lists the 2026 driver line-up. It has not yet been checked
   against FastF1; see the note in the file. No team or driver pace ratings exist yet, so every
   car has the same base speed plus a small random variation drawn at the start of each race.

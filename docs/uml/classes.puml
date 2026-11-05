@@ -91,10 +91,12 @@ package ui <<Frame>> {
     -brakeTemp : GaugeBar
     -battery : GaugeBar
     -ersLine : GLabel
+    -wetGauge : GaugeBar
+    -weatherLine : GLabel
     -shownCompound : Compound
     {static} 7 constants
     +GaugePanel()
-    +update(Car) : void
+    +update(Car, Race) : void
   }
   class HudPanel {
     -race : Race
@@ -131,7 +133,7 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 32 constants
+    {static} 33 constants
     +label(String, Font, Color) : GLabel
     +panel(double, double) : GRect
     +background(double, double) : GRect
@@ -141,7 +143,7 @@ package ui <<Frame>> {
   class PitWall {
     -pendingInput : ArrayDeque<int[]>
     -screens : ScreenManager
-    {static} 7 constants
+    {static} 10 constants
     +PitWall()
     +run() : void
     +keyPressed(KeyEvent) : void
@@ -198,8 +200,9 @@ package ui <<Frame>> {
     -roster : List<Driver>
     -trackIds : List<String>
     -tracks : HashMap<String, Track>
+    -weather : HashMap<String, WeatherStats>
     -current : Screen
-    +ScreenManager(GraphicsProgram, double, double, List<Driver>, List<String>)
+    +weatherFor(String) : WeatherStats
     +showMenu() : void
     +showTrackSelect() : void
     +showSetup(String) : void
@@ -224,6 +227,8 @@ package ui <<Frame>> {
     -pushButtons : List<UiButton>
     -race : Race
     -seed : long
+    -weatherRoll : int
+    -forecast : Forecast
     -carCount : int
     -choice : StrategyChoice
     -push : PushLevel
@@ -235,6 +240,7 @@ package ui <<Frame>> {
     -undoButton : UiButton
     {static} 2 constants
     +SetupScreen(ScreenManager, Track)
+    +forecastText(Forecast) : String
     +frame(double) : void
     +handleKey(int, boolean) : void
     +handleClick(double, double) : void
@@ -293,6 +299,9 @@ package ui <<Frame>> {
   }
   class WorldView {
     -drawing : TrackDrawing
+    -asphaltChunks : List<GPolygon>
+    -chunkMiddles : List<Double>
+    -chunkLevels : List<Integer>
     -sprites : List<CarSprite>
     -zoom : double
     {static} 13 constants
@@ -302,6 +311,7 @@ package ui <<Frame>> {
     +updateCars(Car) : void
     +toPixelX(double) : double
     +toPixelY(double) : double
+    +updateWetness(TrackConditions) : void
   }
 }
 package sim <<Frame>> {
@@ -351,6 +361,7 @@ package sim <<Frame>> {
     +BattleManager(Race, Random)
     +beforeMove() : void
     +afterMove() : void
+    +cancelAll() : void
     +choosePlayerStance(Stance) : void
     +getPlayerBattle() : Battle
     +clearPlayerBattle() : void
@@ -407,6 +418,7 @@ package sim <<Frame>> {
     -stopsMade : int
     -usedCompounds : EnumSet<Compound>
     -disqualified : boolean
+    -retired : boolean
     -lapsCompleted : int
     -lapStartTime : double
     -lastLapTime : double
@@ -439,6 +451,9 @@ package sim <<Frame>> {
     +getPlan() : PitPlan
     +dryCompoundsUsed() : int
     +usedRainTires() : boolean
+    +retire(int) : void
+    +isRetired() : boolean
+    +isOffTrack() : boolean
     +disqualify() : void
     +isDisqualified() : boolean
     +addTimePenalty(double) : void
@@ -539,6 +554,29 @@ package sim <<Frame>> {
     +getCharge() : double
     +isDeploying() : boolean
   }
+  class EventQueue {
+    -queue : PriorityQueue<RaceEvent>
+    +EventQueue()
+    +schedule(RaceEvent) : void
+    +takeDue(double) : List<RaceEvent>
+    +peek() : RaceEvent
+    +size() : int
+  }
+  class Forecast {
+    -trackTemp : double
+    -airTemp : double
+    -rain : RainEvent
+    -shownChance : double
+    -shownLap : int
+    -approximate : boolean
+    +Forecast(double, double, RainEvent, double, int, boolean)
+    +getTrackTemp() : double
+    +getAirTemp() : double
+    +getRain() : RainEvent
+    +getShownChance() : double
+    +getShownLap() : int
+    +isApproximate() : boolean
+  }
   class LapCalibrator {
     {static} 2 constants
     +gripScaleFor(Track) : synchronized double
@@ -616,6 +654,11 @@ package sim <<Frame>> {
     -track : Track
     -profiles : ProfileSet
     -conditions : TrackConditions
+    -rain : RainEvent
+    -forecast : Forecast
+    -events : EventQueue
+    -safetyCar : SafetyCar
+    -engineer : RadioEngineer
     -random : Random
     -cars : ArrayList<Car>
     -standings : ArrayList<Car>
@@ -634,6 +677,13 @@ package sim <<Frame>> {
     -finishedCount : int
     +Race(RaceConfig, Track, List<Driver>)
     +step() : void
+    +applyForecast(Forecast) : void
+    +setRain(RainEvent) : void
+    +scheduleSafetyCar(double, Car) : void
+    +scheduleRetirement(double, Car) : void
+    +getForecast() : Forecast
+    +getRain() : RainEvent
+    +getSafetyCar() : SafetyCar
     +slipstreamFactor(double, double, boolean) : double
     +getQualifying() : List<QualifyingEntry>
     +sideBySide(Car, Car) : boolean
@@ -671,6 +721,16 @@ package sim <<Frame>> {
     +getLaps() : int
     +getSeed() : long
   }
+  class RaceEvent {
+    -time : double
+    -type : Type
+    -car : Car
+    +RaceEvent(double, Type, Car)
+    +compareTo(RaceEvent) : int
+    +getTime() : double
+    +getType() : Type
+    +getCar() : Car
+  }
   class RaceMessage {
     -time : double
     -text : String
@@ -679,6 +739,34 @@ package sim <<Frame>> {
     +getTime() : double
     +getText() : String
     +isAboutPlayer() : boolean
+  }
+  class RadioEngineer {
+    -race : Race
+    -lastSent : HashMap<String, Double>
+    -lastCheck : double
+    -lastGapBehind : double
+    +RadioEngineer(Race)
+    +update() : void
+  }
+  class RainEvent {
+    -start : double
+    -duration : double
+    -peak : double
+    +RainEvent(double, double, double)
+    +intensityAt(double) : double
+    +getStart() : double
+    +getEnd() : double
+    +getPeak() : double
+  }
+  class SafetyCar {
+    -active : boolean
+    -deployments : int
+    +SafetyCar()
+    +deploy() : void
+    +end() : void
+    +paceFactor(boolean, double) : double
+    +isActive() : boolean
+    +getDeployments() : int
   }
   class SpeedProfile {
     -track : Track
@@ -751,15 +839,24 @@ package sim <<Frame>> {
     +angleDifference(double, double) : double
   }
   class TrackConditions {
+    -track : Track
     -trackTemp : double
     -airTemp : double
-    -wetness : double
-    +TrackConditions(double, double, double)
-    +neutral() : TrackConditions
+    -wetness : double[][]
+    -dryingRate : double[][]
+    -sampleColumn : int[]
+    -sampleRow : int[]
+    -rainIntensity : double
+    -average : double
+    +TrackConditions(Track, double, double, Random)
+    +neutral(Track) : TrackConditions
+    +update(double, double) : void
+    +wetnessAt(double) : double
+    +averageWetness() : double
     +tireAmbient() : double
     +getTrackTemp() : double
     +getAirTemp() : double
-    +wetnessAt(double) : double
+    +getRainIntensity() : double
     +setWetness(double) : void
   }
   class TrackProfile {
@@ -773,6 +870,8 @@ package sim <<Frame>> {
     -pitEntryDistance : double
     -pitExitDistance : double
     -pitSide : int
+    -safetyCarProbability : double
+    -weatherVolatility : double
     -difficultyLabel : String
     -description : String
     -dataSource : String
@@ -786,6 +885,8 @@ package sim <<Frame>> {
     +getPitEntryDistance() : double
     +getPitExitDistance() : double
     +getPitSide() : int
+    +getSafetyCarProbability() : double
+    +getWeatherVolatility() : double
     +getDifficultyLabel() : String
     +getDescription() : String
     +getDataSource() : String
@@ -806,7 +907,7 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 138 constants
+    {static} 174 constants
   }
 }
 package ai <<Frame>> {
@@ -829,6 +930,9 @@ package data <<Frame>> {
     +open(String) : BufferedReader
     +isSkippable(String) : boolean
   }
+  class ForecastGenerator {
+    +generate(WeatherStats, TrackProfile, int, Random) : Forecast
+  }
   class RosterLoader {
     {static} 1 constants
     +load() : List<Driver>
@@ -836,6 +940,28 @@ package data <<Frame>> {
   class TrackLoader {
     +load(String) : Track
     +listTrackIds() : List<String>
+  }
+  class WeatherStats {
+    -trackId : String
+    -airMean : double
+    -airSd : double
+    -trackMean : double
+    -trackSd : double
+    -rainChance : double
+    -sessionsUsed : int
+    -approximate : boolean
+    +getTrackId() : String
+    +getAirMean() : double
+    +getAirSd() : double
+    +getTrackMean() : double
+    +getTrackSd() : double
+    +getRainChance() : double
+    +getSessionsUsed() : int
+    +isApproximate() : boolean
+  }
+  class WeatherStatsLoader {
+    {static} 2 constants
+    +load() : HashMap<String, WeatherStats>
   }
 }
 Battle --> Car
@@ -862,6 +988,8 @@ Car --> Compound
 CarSprite --> Car
 GCompound <|-- DebugOverlay
 Driver --> Team
+EventQueue --> RaceEvent
+Forecast --> RainEvent
 GCompound <|-- GaugeBar
 GCompound <|-- GaugePanel
 GaugePanel --> GaugeBar
@@ -886,12 +1014,19 @@ Race --> RaceConfig
 Race --> Track
 Race --> ProfileSet
 Race --> TrackConditions
+Race --> RainEvent
+Race --> Forecast
+Race --> EventQueue
+Race --> SafetyCar
+Race --> RadioEngineer
 Race --> Car
 Race --> Corner
 Race --> BattleManager
 Race --> PitLane
 Race --> RaceMessage
 Race --> QualifyingEntry
+Comparable <|.. RaceEvent
+RaceEvent --> Car
 Screen <|.. RaceScreen
 RaceScreen --> ScreenManager
 RaceScreen --> Race
@@ -906,10 +1041,12 @@ RaceScreen --> BattlePrompt
 RaceScreen --> Battle
 RaceScreen --> DebugOverlay
 RaceScreen --> Car
+RadioEngineer --> Race
 GCompound <|-- RadioFeed
 RadioFeed --> RaceMessage
 ScreenManager --> Driver
 ScreenManager --> Track
+ScreenManager --> WeatherStats
 ScreenManager --> Screen
 Screen <|.. SetupScreen
 SetupScreen --> ScreenManager
@@ -917,6 +1054,7 @@ SetupScreen --> Track
 SetupScreen --> ButtonGroup
 SetupScreen --> UiButton
 SetupScreen --> Race
+SetupScreen --> Forecast
 SetupScreen --> PushLevel
 SpeedProfile --> Track
 StrategyPreset --> Compound
@@ -925,6 +1063,7 @@ TimingTower --> Race
 Tire --> Compound
 Track --> TrackProfile
 Track --> TrackSample
+TrackConditions --> Track
 TrackDrawing --> Track
 Screen <|.. TrackSelectScreen
 TrackSelectScreen --> ScreenManager

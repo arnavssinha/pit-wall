@@ -160,6 +160,9 @@ public final class TimingTower extends GCompound {
         if (car.isDisqualified()) {
             return "DSQ";
         }
+        if (car.isRetired()) {
+            return "DNF";
+        }
         if (car.isInPitLane() && !car.isFinished()) {
             return "IN PIT";
         }

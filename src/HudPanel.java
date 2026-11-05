@@ -123,6 +123,9 @@ public final class HudPanel extends GCompound {
      */
     public void update(Car followed, int timeSpeed, boolean paused) {
         String state = paused ? "PAUSED" : timeSpeed + "x";
+        if (race.getSafetyCar().isActive()) {
+            state += "   SAFETY CAR";
+        }
         setText(topLine, String.format(Locale.ROOT, "%s   %s   %s   %s",
                 race.getTrack().getProfile().getName().toUpperCase(Locale.ROOT),
                 clock(race.getTime()), state, "SEED " + race.getConfig().getSeed()));

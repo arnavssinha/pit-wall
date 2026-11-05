@@ -51,7 +51,7 @@ public final class PitLane {
      */
     public void beforeMove() {
         for (Car car : race.getCars()) {
-            if (car.isFinished()) {
+            if (car.isFinished() || car.isRetired()) {
                 continue;
             }
             PitStrategyPlanner.callStops(car, race);
@@ -156,7 +156,7 @@ public final class PitLane {
     private boolean canMerge(Car car) {
         double mergeSeconds = Math.abs(car.getLateralOffset()) / Tuning.PIT_LATERAL_SPEED + Tuning.MERGE_MARGIN_SECONDS;
         for (Car other : race.getCars()) {
-            if (other == car || other.isInPitLane()) {
+            if (other == car || other.isInPitLane() || other.isRetired()) {
                 continue;
             }
             double behindNeeded = Tuning.MIN_SEPARATION + Math.max(0, other.getSpeed() - car.getSpeed()) * mergeSeconds;
