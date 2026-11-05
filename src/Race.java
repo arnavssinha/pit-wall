@@ -82,9 +82,6 @@ public final class Race {
 
     /**
      * Sets up the race: finds the corners, runs qualifying, and places the cars on the grid.
-     *
-     * @param config race settings
-     * @param track the circuit
      * Computer drivers get a random strategy; the player starts on the one-stop-late plan until
      * setPlayerPlan is called from the setup screen.
      *
