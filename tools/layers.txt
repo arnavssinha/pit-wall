@@ -43,6 +43,7 @@ sim RaceEvent.java
 sim EventQueue.java
 sim SafetyCar.java
 sim RadioEngineer.java
+sim RaceReport.java
 
 ai AiDriver.java
 ai DefaultStancePolicy.java
@@ -78,3 +79,13 @@ ui MenuScreen.java
 ui TrackSelectScreen.java
 ui SetupScreen.java
 ui TrackOutline.java
+ui LineChart.java
+ui BarChart.java
+ui ResultsScreen.java
+ui LabScreen.java
+
+lab StrategyVariant.java
+lab LabRun.java
+lab LabResult.java
+lab StrategyLab.java
+lab LabCsvWriter.java

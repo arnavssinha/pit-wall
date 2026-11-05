@@ -46,6 +46,16 @@ public final class Race {
     /** All cars, in grid order. Index equals Car.getId(). */
     private final ArrayList<Car> cars = new ArrayList<Car>();
 
+    /**
+     * Cars in the order they sit on the road (by position on the lap, not by race position),
+     * re-sorted after every step. The car ahead of any car on the road is simply the next one in this
+     * list, which is much faster than comparing every pair of cars.
+     */
+    private final ArrayList<Car> roadOrder = new ArrayList<Car>();
+
+    /** Index of each car (by id) in roadOrder. */
+    private int[] roadIndex;
+
     /** Cars in race order, re-sorted after every step. */
     private final ArrayList<Car> standings = new ArrayList<Car>();
 
@@ -143,6 +153,9 @@ public final class Race {
             }
         }
         playerCar = player;
+        roadOrder.addAll(cars);
+        roadIndex = new int[cars.size()];
+        refreshRoadOrder();
         scheduleIncidents();
 
         lapTimes = new double[cars.size()][config.getLaps()];
@@ -207,8 +220,19 @@ public final class Race {
         }
         time += dt;
         Collections.sort(standings, Race::compareStandings);
+        refreshRoadOrder();
         battles.afterMove();
         engineer.update();
+    }
+
+    /**
+     * Sorts the cars by where they are on the lap and remembers each car's place in that order.
+     */
+    private void refreshRoadOrder() {
+        Collections.sort(roadOrder, (a, b) -> Double.compare(track.wrap(a.getDistance()), track.wrap(b.getDistance())));
+        for (int i = 0; i < roadOrder.size(); i++) {
+            roadIndex[roadOrder.get(i).getId()] = i;
+        }
     }
 
     /**
@@ -428,8 +452,7 @@ public final class Race {
      * @return true on straights
      */
     private boolean onStraight(Car car) {
-        SpeedProfile reference = profiles.forCarGrip(Compound.MEDIUM.getDryGrip());
-        return reference.cornerLimitAt(track.indexAt(car.getDistance())) >= Tuning.STRAIGHT_FRACTION * Tuning.TOP_SPEED;
+        return profiles.isStraight(car.getDistance());
     }
 
     /**
@@ -465,21 +488,17 @@ public final class Race {
      * @return the blocking car, or null
      */
     private Car blockingCarAhead(Car car) {
-        Car best = null;
-        double bestGap = Double.MAX_VALUE;
-        for (Car other : cars) {
+        int n = roadOrder.size();
+        int start = roadIndex[car.getId()];
+        for (int k = 1; k < n; k++) {
+            Car other = roadOrder.get((start + k) % n);
             boolean mayBeAlongside = other == car.getPassPartner() || car.isOffTrack() != other.isOffTrack()
                     || car.isRetired() || other.isRetired();
-            if (other == car || (mayBeAlongside && sideBySide(car, other))) {
-                continue;
-            }
-            double gap = trackGap(car, other);
-            if (gap < bestGap) {
-                bestGap = gap;
-                best = other;
+            if (!(mayBeAlongside && sideBySide(car, other))) {
+                return other;
             }
         }
-        return best;
+        return null;
     }
 
     /**
@@ -537,18 +556,8 @@ public final class Race {
      * @return the car ahead, or null if this is the only car
      */
     public Car carAheadOnTrack(Car car) {
-        Car best = null;
-        double bestGap = Double.MAX_VALUE;
-        for (Car other : cars) {
-            if (other != car) {
-                double gap = trackGap(car, other);
-                if (gap < bestGap) {
-                    bestGap = gap;
-                    best = other;
-                }
-            }
-        }
-        return best;
+        int n = roadOrder.size();
+        return n < 2 ? null : roadOrder.get((roadIndex[car.getId()] + 1) % n);
     }
 
     /**
@@ -767,6 +776,41 @@ public final class Race {
         double span = afterDistance - k * loop;
         double aheadWasHere = span <= 0 ? before : before + (after - before) * (d - k * loop) / span;
         return Math.max(0, time - aheadWasHere);
+    }
+
+    /**
+     * Returns when a car passed a point, read from the timing loops and blended between the two loops
+     * either side of it.
+     *
+     * @param car the car
+     * @param distance total distance in meters (lap number times lap length plus position on the lap)
+     * @return race time in seconds, or NaN if the car has not reached that point
+     */
+    public double timeAtDistance(Car car, double distance) {
+        if (distance > car.getDistance()) {
+            return Double.NaN;
+        }
+        double loop = Tuning.TIMING_LOOP_SPACING;
+        double d = distance - loopOrigin;
+        int k = (int) Math.floor(d / loop);
+        if (k < 0 || k + 1 >= loopTimes[0].length) {
+            return Double.NaN;
+        }
+        double before = loopTimes[car.getId()][k];
+        double after = (k + 1) * loop <= car.getDistance() - loopOrigin ? loopTimes[car.getId()][k + 1] : time;
+        return before + (after - before) * (d - k * loop) / loop;
+    }
+
+    /**
+     * Runs the race to its end without drawing (used when the player skips ahead to the results).
+     *
+     * @param maxSeconds stop after this much more race time even if not over
+     */
+    public void runToEnd(double maxSeconds) {
+        double stop = time + maxSeconds;
+        while (!isOver() && time < stop) {
+            step();
+        }
     }
 
     /**

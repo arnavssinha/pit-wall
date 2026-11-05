@@ -4,8 +4,8 @@ An F1 race-strategy game written in Java with the ACM graphics library.
 You are the race engineer for one driver in a 10-lap sprint. The car drives itself;
 you make the strategy calls.
 
-> Status: **M1, first deliverable.** 22 computer-driven cars race 10 laps of Monza with a follow camera,
-> timing tower, lap counter and minimap. Strategy controls arrive in later milestones (see `DEVLOG.md`).
+> Status: **M7 complete.** Full race weekend flow on Monza (menu, track select, setup, race, results) and
+> the Strategy Lab. More tracks, real data and the demo mode come in M8 and M9 (see `DEVLOG.md`).
 
 ## Play it in three steps
 
@@ -60,6 +60,28 @@ you make the strategy calls.
    box early, N to box next lap, and 1-5 to change the tires. In a dry race you must use two different
    dry compounds or you are disqualified.
 
+5. **Results.** After the flag (or press Enter once you have finished) you get the classification, your
+   tire wear and gaps lap by lap, the best sectors, and where you gained or lost time at each corner.
+6. **Strategy Lab** (from the menu or the results, key L). It races every strategy on the same random
+   grids, weather and incidents (about 200 races, around 15 to 20 seconds) and shows the win and podium
+   chances, average finish, places gained, how each strategy did in rain or dry and on a hot or cool
+   track, and the best pit-stop lap. It also saves the numbers to `PitWall-lab-<track>.csv` in your home
+   folder (on a Mac: your user folder, the one with Desktop and Documents in it).
+
+## Testing it yourself (no programming needed)
+
+A ten-minute check that everything works:
+
+1. Double-click `PitWall.jar`. The menu appears. Press Enter, Enter again (Monza), and you are on the
+   setup screen. Press R a few times: your driver and grid slot change. Press V: the weather forecast changes.
+2. Press Enter to start. Press F3: the top-right box shows the frame rate (it should be close to 60).
+3. Press T until it says 8x. Press E (Push) and watch the tire temperature needle and wear bar rise faster.
+4. When the screen slows down and a red box appears, press A (or click Attack). Read the result on the radio.
+5. Wait for your planned pit stop (the bottom panel tells you the lap), or press B to box now.
+   Watch the car drive through the pit lane.
+6. Let the race finish (or press Enter after you cross the line): check the results screen.
+7. Press L for the Strategy Lab, then Enter. Wait about 20 seconds for the results.
+
 ## Where the data comes from
 
 - **Monza track shape: approximate, hand-built.** `data/tracks/monza_centerline.csv` was traced
@@ -92,7 +114,7 @@ Requires a JDK (17 or 21) on the PATH.
 tools/audit.sh      # Javadoc, import, layer and warning checks
 tools/make_uml.sh   # regenerates docs/uml/classes.png
 tools/make_submission.sh   # copies every .java file and the UML PNG flat into submission/
-java -jar PitWall.jar --selftest   # opens the window, races for 10 s, prints frames per second, exits
+java -jar PitWall.jar --selftest   # opens the window, races 10 s with rain and a safety car, prints FPS, exits
 ```
 
 On Windows use `build.bat` and `run.bat`.

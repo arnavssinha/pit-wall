@@ -88,6 +88,9 @@ public final class Palette {
     /** Background of a disabled button. */
     public static final Color BUTTON_DISABLED = new Color(30, 34, 44);
 
+    /** Purple, used for a fastest sector. */
+    public static final Color PURPLE = new Color(190, 110, 255);
+
     /** Large headline font. */
     public static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 26);
 

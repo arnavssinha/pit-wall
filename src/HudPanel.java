@@ -181,7 +181,7 @@ public final class HudPanel extends GCompound {
         Car player = race.getPlayerCar();
         bannerTitle.setLabel("CHEQUERED FLAG - " + winner.getDriver().getName() + " wins");
         String result = player.isFinished() ? "You finished P" + player.getFinishPosition() : "You are finishing your last lap";
-        bannerDetail.setLabel(result + ".  Press R for a new race.");
+        bannerDetail.setLabel(result + ".  Enter: results once you finish.");
         double x = (width - bannerBox.getWidth()) / 2 + TimingTower.WIDTH / 2;
         bannerBox.setLocation(x, 60);
         bannerTitle.setLocation(x + 16, 98);
@@ -198,7 +198,7 @@ public final class HudPanel extends GCompound {
     public void refreshBanner() {
         Car player = race.getPlayerCar();
         if (bannerShown && player.isFinished()) {
-            setText(bannerDetail, "You finished P" + player.getFinishPosition() + ".  Press R for a new race.");
+            setText(bannerDetail, "You finished P" + player.getFinishPosition() + ".  Press Enter for the results.");
         }
     }
 

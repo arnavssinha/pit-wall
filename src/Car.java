@@ -614,9 +614,7 @@ public final class Car {
                 track.getProfile().getTrackWearMultiplier(), conditions.tireAmbient(),
                 conditions.wetnessAt(distance));
         brakes.update(dt, speed, deceleration, pushLevel.getHeat(), conditions.getAirTemp());
-        SpeedProfile reference = profiles.forCarGrip(Compound.MEDIUM.getDryGrip());
-        boolean onStraight = reference.cornerLimitAt(track.indexAt(distance)) >= Tuning.STRAIGHT_FRACTION * Tuning.TOP_SPEED;
-        ers.update(dt, deceleration, wantDeploy, onStraight);
+        ers.update(dt, deceleration, wantDeploy, profiles.isStraight(distance));
     }
 
     /**

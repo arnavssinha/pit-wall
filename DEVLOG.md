@@ -188,3 +188,25 @@ car (no passes; the cars that stayed out closed from 1259 m to 593 m), retiremen
 order. The self-test now includes early rain and a safety car: 59.3 FPS, no exceptions.
 
 **Next:** M7, results screen and Strategy Lab.
+
+## M7 Results and Strategy Lab (2026-11-05)
+
+**Done**
+- `RaceReport`: classification (finishers, then DNF, then DSQ), tire wear by lap, gap to the leader by lap
+  for the player and the cars either side, best sectors (three per lap, from the timing loops), the
+  player's sectors by lap (TreeMap), and seconds gained or lost per lap at each corner against the field
+  median (clean laps only).
+- `ResultsScreen` with `LineChart` and `BarChart` drawn from ACM shapes. The race moves to the results 4 s
+  after the last car finishes, or straight away with Enter once the player has finished.
+- Strategy Lab (`StrategyLab`, `StrategyVariant`, `LabRun`, `LabResult`, `LabCsvWriter`, `LabScreen`): each
+  scenario (seed plus weather drawn from the statistics) is raced once per strategy (three presets and a
+  Medium-Hard pit-window sweep at laps 2, 4, 6, 8), so comparisons are paired. Races run in parallel on
+  every core (ExecutorService). Output: win and podium share, average finish and places gained, rain/dry
+  and hot/cool splits, best pit window, comparison with the player's last race, CSV in the home folder.
+- Speed: neighbour lookups use a road order sorted once per step instead of comparing every pair
+  (identical results, about 2x faster); straights are precomputed per track.
+
+**Verified:** 32/32 tests (report sectors add up to the lap time; lab scenarios share grids; CSV written;
+196 races in 14.9 s on 4 cores against a 60 s target). Results and Lab screens checked with screenshots.
+
+**Next:** M8 (all six tracks, real data export, roster check, balance), M9 (docs, demo mode, final audit).

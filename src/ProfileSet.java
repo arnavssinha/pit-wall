@@ -17,6 +17,9 @@ public final class ProfileSet {
     /** Profiles already built, keyed by grip divided by the step and rounded. */
     private final HashMap<Integer, SpeedProfile> profiles = new HashMap<Integer, SpeedProfile>();
 
+    /** Whether each track sample is on a straight, judged once from the reference profile. */
+    private final boolean[] straight;
+
     /** Average load per meter over a clean reference lap, used to keep heat and wear fair across tracks. */
     private final double meanLoad;
 
@@ -30,6 +33,21 @@ public final class ProfileSet {
         this.track = track;
         this.gripScale = gripScale;
         this.meanLoad = LapCalibrator.meanLoadPerMeter(track, gripScale);
+        SpeedProfile reference = forCarGrip(Compound.MEDIUM.getDryGrip());
+        straight = new boolean[track.getSampleCount()];
+        for (int i = 0; i < straight.length; i++) {
+            straight[i] = reference.cornerLimitAt(i) >= Tuning.STRAIGHT_FRACTION * Tuning.TOP_SPEED;
+        }
+    }
+
+    /**
+     * Returns whether a point on the lap is on a straight (where ERS and slipstream help).
+     *
+     * @param distance distance along the lap in meters
+     * @return true on straights
+     */
+    public boolean isStraight(double distance) {
+        return straight[track.indexAt(distance)];
     }
 
     /**

@@ -108,6 +108,30 @@ public final class ScreenManager {
     }
 
     /**
+     * Shows the results of a finished race.
+     *
+     * @param race the race
+     */
+    public void showResults(Race race) {
+        program.removeAll();
+        current = new ResultsScreen(this, race);
+    }
+
+    /**
+     * Shows the Strategy Lab for a track.
+     *
+     * @param trackId the track
+     * @param lastRace the player's last race report on this track, or null
+     */
+    public void showLab(String trackId, RaceReport lastRace) {
+        Track track = track(trackId);
+        if (track != null) {
+            program.removeAll();
+            current = new LabScreen(this, track, lastRace);
+        }
+    }
+
+    /**
      * Starts a race straight away with default settings (used by the self-test).
      *
      * @param trackId the track

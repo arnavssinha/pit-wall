@@ -73,6 +73,9 @@ public final class RaceScreen implements Screen {
     /** True while the debug overlay is on screen. */
     private boolean debugShown;
 
+    /** Real seconds since the race ended (the results follow after a short pause). */
+    private double overClock;
+
     /** True while paused. */
     private boolean paused;
 
@@ -141,6 +144,13 @@ public final class RaceScreen implements Screen {
      */
     @Override
     public void frame(double realSeconds) {
+        if (race.isOver()) {
+            overClock += realSeconds;
+            if (overClock >= Tuning.RESULTS_DELAY_SECONDS) {
+                manager.showResults(race);
+                return;
+            }
+        }
         int steps = stepsForFrame(realSeconds);
         for (int i = 0; i < steps; i++) {
             race.step();
@@ -330,6 +340,12 @@ public final class RaceScreen implements Screen {
                 break;
             case KeyEvent.VK_ESCAPE:
                 manager.showMenu();
+                break;
+            case KeyEvent.VK_ENTER:
+                if (race.getPlayerCar().isFinished() || race.getPlayerCar().isRetired()) {
+                    race.runToEnd(Tuning.SKIP_TO_RESULTS_SECONDS);
+                    manager.showResults(race);
+                }
                 break;
             case KeyEvent.VK_Q:
                 race.getPlayerCar().setPushLevel(PushLevel.CONSERVE);

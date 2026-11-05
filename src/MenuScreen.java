@@ -48,8 +48,11 @@ public final class MenuScreen implements Screen {
         UiButton race = new UiButton("Race  (Enter)", 260, 48);
         p.add(race, 80, 240);
         buttons.add(race, () -> manager.showTrackSelect());
+        UiButton labButton = new UiButton("Strategy Lab  (L)", 260, 48);
+        p.add(labButton, 80, 300);
+        buttons.add(labButton, () -> manager.showLab(manager.getTrackIds().get(0), null));
 
-        double y = 360;
+        double y = 390;
         for (String line : CONTROLS) {
             GLabel l = Palette.label(line, Palette.SMALL, Palette.TEXT_DIM);
             p.add(l, 84, y);
@@ -70,7 +73,7 @@ public final class MenuScreen implements Screen {
     }
 
     /**
-     * Enter starts the race flow.
+     * Enter starts the race flow; L opens the Strategy Lab.
      *
      * @param keyCode the key
      * @param shift whether Shift was held
@@ -79,6 +82,8 @@ public final class MenuScreen implements Screen {
     public void handleKey(int keyCode, boolean shift) {
         if (keyCode == KeyEvent.VK_ENTER) {
             manager.showTrackSelect();
+        } else if (keyCode == KeyEvent.VK_L) {
+            manager.showLab(manager.getTrackIds().get(0), null);
         }
     }
 

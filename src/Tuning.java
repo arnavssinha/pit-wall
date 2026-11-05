@@ -449,6 +449,18 @@ public final class Tuning {
     /** The engineer warns about rain this many laps before it starts. */
     public static final int RADIO_RAIN_WARN_LAPS = 2;
 
+    /** Races the Strategy Lab runs by default (brief: 200). Rounded down to whole scenarios of 7 strategies. */
+    public static final int LAB_DEFAULT_RACES = 200;
+
+    /** Target time for a default Strategy Lab run, in seconds, on a computer with 4 or more cores. */
+    public static final double LAB_TARGET_SECONDS = 60.0;
+
+    /** Real seconds between the end of the race and the results screen. */
+    public static final double RESULTS_DELAY_SECONDS = 4.0;
+
+    /** When the player skips to the results, the rest of the race is run this far ahead at most, in race seconds. */
+    public static final double SKIP_TO_RESULTS_SECONDS = 600.0;
+
     /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
     public static final double PROFILE_GRIP_STEP = 0.004;
 

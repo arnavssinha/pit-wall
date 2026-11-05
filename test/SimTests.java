@@ -70,6 +70,9 @@ public final class SimTests {
         check("safety car: no passes, field bunches up", () -> testSafetyCar());
         check("retirement: car stops, classified DNF, race ends", () -> testRetirement());
         check("event queue hands out the earliest event first", () -> testEventQueue());
+        check("race report: sectors add up, charts have data", () -> testRaceReport());
+        check("strategy lab: same grid per scenario, CSV written", () -> testLabSmall());
+        check("strategy lab: 200 races within the time target", () -> testLabSpeed());
     }
 
     /**
@@ -839,5 +842,83 @@ public final class SimTests {
         List<RaceEvent> due = queue.takeDue(25);
         require(due.size() == 2 && due.get(0).getTime() == 10 && due.get(1).getTime() == 20, "wrong order or count");
         require(queue.size() == 1 && queue.peek().getTime() == 30, "the last event should remain");
+    }
+
+    /**
+     * Checks the race report: the player's three sector times add up to the lap time, the wear and gap
+     * series cover every lap, the winner's gap is zero, and the best sectors are at least as fast as the player's.
+     */
+    private void testRaceReport() {
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 61L), monza(), roster());
+        runToEnd(race);
+        RaceReport report = new RaceReport(race);
+        Car player = race.getPlayerCar();
+        require(report.getClassification().size() == 22, "classification should list every car");
+        if (!player.isRetired()) {
+            double[] sectors = report.getPlayerSectors().get(3);
+            double sum = sectors[0] + sectors[1] + sectors[2];
+            require(Math.abs(sum - race.getLapTime(player, 3)) < 0.05, "sectors " + sum + " vs lap " + race.getLapTime(player, 3));
+            double[] wear = report.playerWearByLap();
+            require(wear.length == Tuning.RACE_LAPS && !Double.isNaN(wear[Tuning.RACE_LAPS - 2]), "wear series incomplete");
+        }
+        double[] winnerGaps = report.gapToLeaderByLap(report.getClassification().get(0));
+        require(Math.abs(winnerGaps[Tuning.RACE_LAPS - 1]) < 1e-9, "winner should be 0 s behind the leader on the last lap");
+        for (int s = 0; s < RaceReport.SECTORS; s++) {
+            require(report.getBestSector(s) <= report.getPlayerBestSector(s) + 1e-9, "best sector slower than the player's");
+        }
+        require(report.getCornerDelta().length == race.getCorners().size(), "one corner delta per corner");
+    }
+
+    /**
+     * Runs a tiny lab (2 scenarios times 7 strategies), checks every strategy in a scenario started from
+     * the same grid slot (same scenario), results are in range, and the CSV is written.
+     */
+    private void testLabSmall() {
+        WeatherStats weather;
+        try {
+            weather = WeatherStatsLoader.load().get("monza");
+        } catch (IOException e) {
+            throw new AssertionError(e.getMessage(), e);
+        }
+        StrategyLab lab = new StrategyLab(monza(), roster(), weather, 22);
+        LabResult result = lab.run(14, 1000L);
+        require(result.getRuns().size() == 14, "expected 14 races, got " + result.getRuns().size());
+        for (LabRun a : result.getRuns()) {
+            require(a.getFinish() >= 1 && a.getFinish() <= 22, "finish out of range");
+            for (LabRun b : result.getRuns()) {
+                if (a.getSeed() == b.getSeed()) {
+                    require(a.getGrid() == b.getGrid(), "same scenario should give the same grid slot");
+                }
+            }
+        }
+        require(result.bestPreset() != null && result.bestWindow() != null, "best strategy and window should exist");
+        try {
+            java.io.File file = java.io.File.createTempFile("pitwall-lab", ".csv");
+            LabCsvWriter.write(result, file);
+            List<String> lines = java.nio.file.Files.readAllLines(file.toPath());
+            require(lines.size() >= 14 + 2 + 7, "CSV too short: " + lines.size() + " lines");
+            require(lines.get(1).startsWith("strategy,seed"), "CSV header missing");
+            file.delete();
+        } catch (IOException e) {
+            throw new AssertionError("could not write CSV: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Runs a default-size lab (about 200 races) and checks it finishes within the target time.
+     */
+    private void testLabSpeed() {
+        WeatherStats weather;
+        try {
+            weather = WeatherStatsLoader.load().get("monza");
+        } catch (IOException e) {
+            throw new AssertionError(e.getMessage(), e);
+        }
+        StrategyLab lab = new StrategyLab(monza(), roster(), weather, 22);
+        LabResult result = lab.run(Tuning.LAB_DEFAULT_RACES, 2000L);
+        System.out.printf("      %d races in %.1f s on %d cores (target %.0f s); best: %s, window: %s%n",
+                result.getRuns().size(), result.getSeconds(), Runtime.getRuntime().availableProcessors(),
+                Tuning.LAB_TARGET_SECONDS, result.bestPreset().getName(), result.bestWindow().getName());
+        require(result.getSeconds() < Tuning.LAB_TARGET_SECONDS, "lab took " + result.getSeconds() + " s");
     }
 }
