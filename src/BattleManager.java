@@ -112,11 +112,12 @@ public final class BattleManager {
      * @param attacker the car that might attack
      */
     private void maybeOpen(Car attacker) {
-        if (attacker.isFinished() || attacker.getPassPartner() != null || attacker.getSpeed() < 1 || involved(attacker)) {
+        if (attacker.isFinished() || attacker.isInPitLane() || attacker.getPassPartner() != null
+                || attacker.getSpeed() < 1 || involved(attacker)) {
             return;
         }
         Car defender = race.carAheadOnTrack(attacker);
-        if (defender == null || defender.getPassPartner() != null || involved(defender)) {
+        if (defender == null || defender.isInPitLane() || defender.getPassPartner() != null || involved(defender)) {
             return;
         }
         double gap = gapSeconds(attacker, defender);

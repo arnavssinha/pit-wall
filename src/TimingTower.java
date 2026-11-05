@@ -157,6 +157,12 @@ public final class TimingTower extends GCompound {
         if (position == 0) {
             return car.isFinished() ? "Winner" : "Leader";
         }
+        if (car.isDisqualified()) {
+            return "DSQ";
+        }
+        if (car.isInPitLane() && !car.isFinished()) {
+            return "IN PIT";
+        }
         int lapsDown = race.lapsBehindLeader(car);
         if (lapsDown > 0) {
             return "+" + lapsDown + (lapsDown == 1 ? " LAP" : " LAPS");

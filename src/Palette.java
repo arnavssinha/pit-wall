@@ -1,3 +1,5 @@
+import acm.graphics.GLabel;
+import acm.graphics.GRect;
 import java.awt.Color;
 import java.awt.Font;
 import java.util.HashMap;
@@ -19,6 +21,9 @@ public final class Palette {
 
     /** Gravel traps on the outside of corners. */
     public static final Color GRAVEL = new Color(196, 178, 132);
+
+    /** Pit lane surface. */
+    public static final Color PIT_LANE = new Color(70, 74, 82);
 
     /** Track surface. */
     public static final Color ASPHALT = new Color(58, 61, 69);
@@ -99,6 +104,57 @@ public final class Palette {
      * Not instantiated; this class only holds constants.
      */
     private Palette() {
+    }
+
+    /** Background of menu and setup screens. */
+    public static final Color SCREEN_BACK = new Color(20, 24, 34);
+
+    /** Huge title font. */
+    public static final Font TITLE = new Font("SansSerif", Font.BOLD, 64);
+
+    /**
+     * Makes a label with a font and color, ready to add.
+     *
+     * @param text the text
+     * @param font the font
+     * @param color the color
+     * @return the label
+     */
+    public static GLabel label(String text, Font font, Color color) {
+        GLabel label = new GLabel(text);
+        label.setFont(font);
+        label.setColor(color);
+        return label;
+    }
+
+    /**
+     * Makes a filled panel rectangle in the standard panel style, ready to add.
+     *
+     * @param width width in pixels
+     * @param height height in pixels
+     * @return the rectangle
+     */
+    public static GRect panel(double width, double height) {
+        GRect rect = new GRect(width, height);
+        rect.setFilled(true);
+        rect.setFillColor(PANEL);
+        rect.setColor(PANEL_EDGE);
+        return rect;
+    }
+
+    /**
+     * Makes a full-screen background rectangle for menu-style screens.
+     *
+     * @param width canvas width
+     * @param height canvas height
+     * @return the rectangle
+     */
+    public static GRect background(double width, double height) {
+        GRect rect = new GRect(width, height);
+        rect.setFilled(true);
+        rect.setFillColor(SCREEN_BACK);
+        rect.setColor(SCREEN_BACK);
+        return rect;
     }
 
     /**

@@ -16,6 +16,13 @@ package ui <<Frame>> {
     +showResult(Battle) : void
     +stanceAt(double, double) : Stance
   }
+  class ButtonGroup {
+    -buttons : List<UiButton>
+    -actions : HashMap<UiButton, Runnable>
+    +ButtonGroup()
+    +add(UiButton, Runnable) : void
+    +click(double, double) : boolean
+  }
   class Camera {
     -world : WorldView
     -drawing : TrackDrawing
@@ -94,6 +101,7 @@ package ui <<Frame>> {
     -topLine : GLabel
     -assignment : GLabel
     -carLine : GLabel
+    -pitLine : GLabel
     -bannerBox : GRect
     -bannerTitle : GLabel
     -bannerDetail : GLabel
@@ -103,6 +111,14 @@ package ui <<Frame>> {
     +HudPanel(Race, double, double)
     +update(Car, int, boolean) : void
     +refreshBanner() : void
+  }
+  class MenuScreen {
+    -manager : ScreenManager
+    -buttons : ButtonGroup
+    +MenuScreen(ScreenManager)
+    +frame(double) : void
+    +handleKey(int, boolean) : void
+    +handleClick(double, double) : void
   }
   class MiniMap {
     -race : Race
@@ -115,17 +131,17 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 29 constants
+    {static} 32 constants
+    +label(String, Font, Color) : GLabel
+    +panel(double, double) : GRect
+    +background(double, double) : GRect
     +compoundColor(Compound) : Color
     +teamColor(Team) : Color
   }
   class PitWall {
-    -pendingKeys : ArrayDeque<int[]>
-    -track : Track
-    -roster : List<Driver>
-    -currentRace : Race
-    -screen : RaceScreen
-    {static} 8 constants
+    -pendingInput : ArrayDeque<int[]>
+    -screens : ScreenManager
+    {static} 7 constants
     +PitWall()
     +run() : void
     +keyPressed(KeyEvent) : void
@@ -133,6 +149,7 @@ package ui <<Frame>> {
     +main(String[]) : void
   }
   class RaceScreen {
+    -manager : ScreenManager
     -program : GraphicsProgram
     -race : Race
     -world : WorldView
@@ -154,18 +171,15 @@ package ui <<Frame>> {
     -debugShown : boolean
     -paused : boolean
     -accumulator : double
-    -restartRequested : boolean
     {static} 1 constants
-    +RaceScreen(GraphicsProgram, Race, double, double)
-    +stepsForFrame(double) : int
+    +RaceScreen(ScreenManager, Race)
+    +frame(double) : void
+    +getRace() : Race
     +handleClick(double, double) : void
-    +render() : void
-    +recordFrame(double, int) : void
     +getFps() : double
     +handleKey(int, boolean) : void
     +showDebug() : void
     +setSpeedIndex(int) : void
-    +isRestartRequested() : boolean
   }
   class RadioFeed {
     -queue : ArrayDeque<RaceMessage>
@@ -174,6 +188,56 @@ package ui <<Frame>> {
     {static} 5 constants
     +RadioFeed()
     +update(List<RaceMessage>) : void
+  }
+  interface Screen {
+  }
+  class ScreenManager {
+    -program : GraphicsProgram
+    -width : double
+    -height : double
+    -roster : List<Driver>
+    -trackIds : List<String>
+    -tracks : HashMap<String, Track>
+    -current : Screen
+    +ScreenManager(GraphicsProgram, double, double, List<Driver>, List<String>)
+    +showMenu() : void
+    +showTrackSelect() : void
+    +showSetup(String) : void
+    +startRace(Race) : RaceScreen
+    +startQuickRace(String, long) : RaceScreen
+    +track(String) : Track
+    +showError(String) : void
+    +getCurrent() : Screen
+    +getProgram() : GraphicsProgram
+    +getWidth() : double
+    +getHeight() : double
+    +getRoster() : List<Driver>
+    +getTrackIds() : List<String>
+  }
+  class SetupScreen {
+    -manager : ScreenManager
+    -track : Track
+    -buttons : ButtonGroup
+    -undo : Deque<StrategyChoice>
+    -presetButtons : List<UiButton>
+    -stintButtons : List<UiButton>
+    -pushButtons : List<UiButton>
+    -race : Race
+    -seed : long
+    -carCount : int
+    -choice : StrategyChoice
+    -push : PushLevel
+    -assignment : GLabel
+    -conditionsLine : GLabel
+    -gridRows : GLabel[]
+    -ruleLine : GLabel
+    -carsLine : GLabel
+    -undoButton : UiButton
+    {static} 2 constants
+    +SetupScreen(ScreenManager, Track)
+    +frame(double) : void
+    +handleKey(int, boolean) : void
+    +handleClick(double, double) : void
   }
   class TimingTower {
     -race : Race
@@ -194,6 +258,7 @@ package ui <<Frame>> {
     {static} 6 constants
     +TrackDrawing(Track)
     +getTrack() : Track
+    +lateralToDrawing(double) : double
     +x(double, double) : double
     +y(double, double) : double
     +offsetX(double, double) : double
@@ -203,12 +268,25 @@ package ui <<Frame>> {
     +minY() : double
     +maxY() : double
   }
+  class TrackOutline {
+    +fit(Track, double, double) : GPolygon
+  }
+  class TrackSelectScreen {
+    -manager : ScreenManager
+    -buttons : ButtonGroup
+    {static} 4 constants
+    +TrackSelectScreen(ScreenManager)
+    +frame(double) : void
+    +handleKey(int, boolean) : void
+    +handleClick(double, double) : void
+  }
   class UiButton {
     -box : GRect
     -label : GLabel
     -enabled : boolean
     {static} 1 constants
     +UiButton(String, double, double)
+    +setLabel(String) : void
     +setHighlighted(boolean) : void
     +setEnabled(boolean) : void
     +isEnabled() : boolean
@@ -217,7 +295,7 @@ package ui <<Frame>> {
     -drawing : TrackDrawing
     -sprites : List<CarSprite>
     -zoom : double
-    {static} 8 constants
+    {static} 13 constants
     +WorldView(Race, TrackDrawing)
     +setZoom(double) : void
     +getZoom() : double
@@ -320,6 +398,15 @@ package sim <<Frame>> {
     -passPartner : Car
     -passAttacker : boolean
     -timePenalty : double
+    -lateralSpeed : double
+    -plan : PitPlan
+    -pitPhase : PitPhase
+    -pitRequest : int
+    -requestedCompound : Compound
+    -crewTimer : double
+    -stopsMade : int
+    -usedCompounds : EnumSet<Compound>
+    -disqualified : boolean
     -lapsCompleted : int
     -lapStartTime : double
     -lastLapTime : double
@@ -332,7 +419,28 @@ package sim <<Frame>> {
     +approachSpeed(double, double, double) : void
     +advance(double, double) : void
     +beginPass(Car, boolean, double) : void
+    +setLateralTarget(double, double) : void
+    +getLateralTarget() : double
     +endPass() : void
+    +requestPit(int, Compound) : void
+    +cancelPit() : void
+    +skipPitEntry() : void
+    +getPitRequest() : int
+    +getRequestedCompound() : Compound
+    +setRequestedCompound(Compound) : void
+    +setPitPhase(PitPhase) : void
+    +getPitPhase() : PitPhase
+    +isInPitLane() : boolean
+    +startCrew(double) : void
+    +crewWork(double) : boolean
+    +countStop() : void
+    +getStopsMade() : int
+    +setPlan(PitPlan) : void
+    +getPlan() : PitPlan
+    +dryCompoundsUsed() : int
+    +usedRainTires() : boolean
+    +disqualify() : void
+    +isDisqualified() : boolean
     +addTimePenalty(double) : void
     +getPassPartner() : Car
     +isPassAttacker() : boolean
@@ -437,6 +545,43 @@ package sim <<Frame>> {
     +meanLoadPerMeter(Track, double) : double
     +cleanLapSeconds(Track, double) : double
   }
+  class PitLane {
+    -race : Race
+    -random : Random
+    -entry : double
+    -exit : double
+    -box : double
+    -laneOffset : double
+    +PitLane(Race, Random)
+    +beforeMove() : void
+    +speedLimit(Car) : double
+    +afterMove(Car, double, double, double) : void
+  }
+  enum PitPhase {
+  }
+  class PitPlan {
+    -startCompound : Compound
+    -stops : ArrayList<PitStop>
+    +PitPlan(Compound)
+    +addStop(PitStop) : void
+    +nextStop() : PitStop
+    +removeNextStop() : void
+    +getStartCompound() : Compound
+    +setStartCompound(Compound) : void
+    +getStops() : List<PitStop>
+    +stintCompound(int) : Compound
+    +setStintCompound(int, Compound) : void
+    +stintCount() : int
+    +usesTwoDryCompounds() : boolean
+  }
+  class PitStop {
+    -lap : int
+    -compound : Compound
+    +PitStop(int, Compound)
+    +getLap() : int
+    +getCompound() : Compound
+    +setCompound(Compound) : void
+  }
   class ProfileSet {
     -track : Track
     -gripScale : double
@@ -476,6 +621,8 @@ package sim <<Frame>> {
     -standings : ArrayList<Car>
     -corners : List<Corner>
     -battles : BattleManager
+    -pitLane : PitLane
+    -wetRace : boolean
     -messages : ArrayList<RaceMessage>
     -qualifying : List<QualifyingEntry>
     -playerCar : Car
@@ -485,7 +632,7 @@ package sim <<Frame>> {
     -loopOrigin : double
     -time : double
     -finishedCount : int
-    +Race(RaceConfig, Track, List<Driver>, Compound)
+    +Race(RaceConfig, Track, List<Driver>)
     +step() : void
     +slipstreamFactor(double, double, boolean) : double
     +getQualifying() : List<QualifyingEntry>
@@ -496,6 +643,9 @@ package sim <<Frame>> {
     +getBattles() : BattleManager
     +carAheadOnTrack(Car) : Car
     +trackGap(Car, Car) : double
+    +getClassification() : List<Car>
+    +setPlayerPlan(PitPlan, PushLevel) : void
+    +isWetRace() : boolean
     +gapToLeader(Car) : double
     +intervalToCarAhead(Car) : double
     +lapsBehindLeader(Car) : int
@@ -543,6 +693,15 @@ package sim <<Frame>> {
   enum Stance {
     -displayName : String
     +getDisplayName() : String
+  }
+  enum StrategyPreset {
+    -displayName : String
+    -stopLaps : int[]
+    -stints : Compound[]
+    +getDisplayName() : String
+    +stintCompound(int) : Compound
+    +stintCount() : int
+    +makePlan() : PitPlan
   }
   class Team {
     -name : String
@@ -611,6 +770,9 @@ package sim <<Frame>> {
     -medianRaceLapSeconds : double
     -trackWearMultiplier : double
     -overtakingDifficulty : double
+    -pitEntryDistance : double
+    -pitExitDistance : double
+    -pitSide : int
     -difficultyLabel : String
     -description : String
     -dataSource : String
@@ -621,6 +783,9 @@ package sim <<Frame>> {
     +getMedianRaceLapSeconds() : double
     +getTrackWearMultiplier() : double
     +getOvertakingDifficulty() : double
+    +getPitEntryDistance() : double
+    +getPitExitDistance() : double
+    +getPitSide() : int
     +getDifficultyLabel() : String
     +getDescription() : String
     +getDataSource() : String
@@ -641,7 +806,7 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 127 constants
+    {static} 138 constants
   }
 }
 package ai <<Frame>> {
@@ -653,6 +818,10 @@ package ai <<Frame>> {
   class DefaultStancePolicy {
     +attackerStance(Car, Car, double, Random) : Stance
     +playerDefault(Car, double, boolean) : Stance
+  }
+  class PitStrategyPlanner {
+    +choosePlan(Random) : PitPlan
+    +callStops(Car, Race) : void
   }
 }
 package data <<Frame>> {
@@ -666,6 +835,7 @@ package data <<Frame>> {
   }
   class TrackLoader {
     +load(String) : Track
+    +listTrackIds() : List<String>
   }
 }
 Battle --> Car
@@ -677,6 +847,7 @@ BattleManager --> Battle
 BattleManager --> Stance
 GCompound <|-- BattlePrompt
 BattlePrompt --> UiButton
+ButtonGroup --> UiButton
 Camera --> WorldView
 Camera --> TrackDrawing
 Car --> Driver
@@ -685,6 +856,9 @@ Car --> Ers
 Car --> Tire
 Car --> PushLevel
 Car --> Stance
+Car --> PitPlan
+Car --> PitPhase
+Car --> Compound
 CarSprite --> Car
 GCompound <|-- DebugOverlay
 Driver --> Team
@@ -694,13 +868,17 @@ GaugePanel --> GaugeBar
 GaugePanel --> Compound
 GCompound <|-- HudPanel
 HudPanel --> Race
+Screen <|.. MenuScreen
+MenuScreen --> ScreenManager
+MenuScreen --> ButtonGroup
 GCompound <|-- MiniMap
 MiniMap --> Race
+PitLane --> Race
+PitPlan --> Compound
+PitPlan --> PitStop
+PitStop --> Compound
 GraphicsProgram <|-- PitWall
-PitWall --> Track
-PitWall --> Driver
-PitWall --> Race
-PitWall --> RaceScreen
+PitWall --> ScreenManager
 ProfileSet --> Track
 ProfileSet --> SpeedProfile
 QualifyingEntry --> Driver
@@ -711,8 +889,11 @@ Race --> TrackConditions
 Race --> Car
 Race --> Corner
 Race --> BattleManager
+Race --> PitLane
 Race --> RaceMessage
 Race --> QualifyingEntry
+Screen <|.. RaceScreen
+RaceScreen --> ScreenManager
 RaceScreen --> Race
 RaceScreen --> WorldView
 RaceScreen --> Camera
@@ -727,13 +908,27 @@ RaceScreen --> DebugOverlay
 RaceScreen --> Car
 GCompound <|-- RadioFeed
 RadioFeed --> RaceMessage
+ScreenManager --> Driver
+ScreenManager --> Track
+ScreenManager --> Screen
+Screen <|.. SetupScreen
+SetupScreen --> ScreenManager
+SetupScreen --> Track
+SetupScreen --> ButtonGroup
+SetupScreen --> UiButton
+SetupScreen --> Race
+SetupScreen --> PushLevel
 SpeedProfile --> Track
+StrategyPreset --> Compound
 GCompound <|-- TimingTower
 TimingTower --> Race
 Tire --> Compound
 Track --> TrackProfile
 Track --> TrackSample
 TrackDrawing --> Track
+Screen <|.. TrackSelectScreen
+TrackSelectScreen --> ScreenManager
+TrackSelectScreen --> ButtonGroup
 GCompound <|-- UiButton
 GCompound <|-- WorldView
 WorldView --> TrackDrawing

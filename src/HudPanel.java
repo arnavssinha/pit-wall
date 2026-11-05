@@ -18,7 +18,7 @@ public final class HudPanel extends GCompound {
     public static final double TOP_BAR_BOTTOM = 50;
 
     /** Height reserved for the bottom panel, in pixels; the world view is framed above it. */
-    public static final double BOTTOM_PANEL_HEIGHT = 82;
+    public static final double BOTTOM_PANEL_HEIGHT = 100;
 
     /** The race being shown. */
     private final transient Race race;
@@ -31,6 +31,9 @@ public final class HudPanel extends GCompound {
 
     /** Speed and lap times of the car being followed. */
     private final GLabel carLine;
+
+    /** The player's pit plan and any pit call. */
+    private final GLabel pitLine;
 
     /** Banner background shown when the race ends. */
     private final GRect bannerBox;
@@ -66,7 +69,7 @@ public final class HudPanel extends GCompound {
         add(topBox);
         topLine = text("", left + 12, 31, Palette.HUD, Palette.TEXT);
 
-        GRect bottomBox = new GRect(left, height - 74, 640, 66);
+        GRect bottomBox = new GRect(left, height - 92, 640, 84);
         bottomBox.setFilled(true);
         bottomBox.setFillColor(Palette.PANEL);
         bottomBox.setColor(Palette.PANEL_EDGE);
@@ -75,9 +78,10 @@ public final class HudPanel extends GCompound {
         Driver d = player.getDriver();
         assignment = text(String.format(Locale.ROOT, "You are driving #%d %s for %s, starting P%d.",
                 d.getNumber(), d.getName(), d.getTeam().getName(), player.getGridPosition()),
-                left + 12, height - 52, Palette.HUD, Palette.PLAYER);
-        carLine = text("", left + 12, height - 32, Palette.MONO, Palette.TEXT);
-        text("Q W E push  X ERS  A S D battle  Space pause  T speed  Z zoom  F/G camera  R restart",
+                left + 12, height - 70, Palette.HUD, Palette.PLAYER);
+        carLine = text("", left + 12, height - 51, Palette.MONO, Palette.TEXT);
+        pitLine = text("", left + 12, height - 33, Palette.MONO, Palette.TEXT);
+        text("QWE push  X ERS  ASD battle  B/N box  1-5 tires  Space pause  T speed  Z zoom  F/G cam  Esc",
                 left + 12, height - 14, Palette.SMALL, Palette.TEXT_DIM);
 
         bannerBox = new GRect(0, 0, 520, 84);
@@ -129,10 +133,41 @@ public final class HudPanel extends GCompound {
                 who, position, followed.getSpeed() * 3.6,
                 lapText(followed.getLastLapTime()), lapText(followed.getBestLapTime())));
 
+        setText(pitLine, pitText(race.getPlayerCar()));
+
         boolean over = race.getStandings().get(0).isFinished();
         if (over && !bannerShown) {
             showBanner();
         }
+    }
+
+    /**
+     * Describes the player's pit situation: a stop under way, a pit call, or the next planned stop.
+     *
+     * @param player the player's car
+     * @return one line of text
+     */
+    private static String pitText(Car player) {
+        switch (player.getPitPhase()) {
+            case IN_LANE:
+            case STOPPED:
+            case LEAVING:
+                return "PIT STOP in progress: " + player.getRequestedCompound().getDisplayName() + "s";
+            case MERGING:
+                return "Leaving the pits: waiting for a gap to rejoin";
+            default:
+                break;
+        }
+        if (player.getPitRequest() == 1) {
+            return "BOX THIS LAP for " + player.getRequestedCompound().getDisplayName() + "s   (B cancels, 1-5 tires)";
+        }
+        if (player.getPitRequest() == 2) {
+            return "BOX NEXT LAP for " + player.getRequestedCompound().getDisplayName() + "s   (B cancels, 1-5 tires)";
+        }
+        PitStop next = player.getPlan().nextStop();
+        String plan = next == null ? "no more stops planned" : "plan: stop at end of lap " + next.getLap()
+                + " for " + next.getCompound().getDisplayName() + "s";
+        return String.format(Locale.ROOT, "Stops %d, %s   (B box now)", player.getStopsMade(), plan);
     }
 
     /**

@@ -8,10 +8,13 @@ import java.util.List;
  * Rendering is separate from simulation: the sim always steps in fixed 1/60 s chunks, and the
  * time-speed setting only changes how many of those chunks run per real second.
  */
-public final class RaceScreen {
+public final class RaceScreen implements Screen {
 
     /** Most simulation steps allowed in one frame, so a slow frame cannot snowball. */
     private static final int MAX_STEPS_PER_FRAME = 48;
+
+    /** The screen manager, for switching screens. */
+    private final ScreenManager manager;
 
     /** The program the objects are added to. */
     private final GraphicsProgram program;
@@ -76,19 +79,19 @@ public final class RaceScreen {
     /** Unspent simulation time carried to the next frame, in seconds. */
     private double accumulator;
 
-    /** True once the player asked for a new race. */
-    private boolean restartRequested;
 
     /**
      * Builds the screen and adds everything to the program's canvas.
      *
-     * @param program the ACM program
+     * @param manager the screen manager
      * @param race the race to show
-     * @param width canvas width in pixels
-     * @param height canvas height in pixels
      */
-    public RaceScreen(GraphicsProgram program, Race race, double width, double height) {
-        this.program = program;
+    public RaceScreen(ScreenManager manager, Race race) {
+        this.manager = manager;
+        this.program = manager.getProgram();
+        double width = manager.getWidth();
+        double height = manager.getHeight();
+        program.setBackground(Palette.GRASS);
         this.race = race;
         this.followed = race.getPlayerCar();
         this.speedIndex = Tuning.DEFAULT_TIME_SPEED_INDEX;
@@ -131,13 +134,38 @@ public final class RaceScreen {
     }
 
     /**
+     * Runs one frame: works out how many fixed simulation steps this frame needs, runs them, redraws,
+     * and feeds the debug overlay.
+     *
+     * @param realSeconds real time since the previous frame
+     */
+    @Override
+    public void frame(double realSeconds) {
+        int steps = stepsForFrame(realSeconds);
+        for (int i = 0; i < steps; i++) {
+            race.step();
+        }
+        render();
+        debug.record(realSeconds, steps, program.getGCanvas());
+    }
+
+    /**
+     * Returns the race on this screen.
+     *
+     * @return the race
+     */
+    public Race getRace() {
+        return race;
+    }
+
+    /**
      * Works out how many fixed simulation steps to run for this frame.
      * Real time times the speed multiplier is added to an accumulator; whole steps are taken out.
      *
      * @param realSeconds real time since the previous frame
      * @return number of steps to run, 0 when paused
      */
-    public int stepsForFrame(double realSeconds) {
+    private int stepsForFrame(double realSeconds) {
         if (paused) {
             accumulator = 0;
             return 0;
@@ -238,6 +266,7 @@ public final class RaceScreen {
      * @param x x on the canvas
      * @param y y on the canvas
      */
+    @Override
     public void handleClick(double x, double y) {
         if (promptShown) {
             Stance stance = prompt.stanceAt(x - prompt.getX(), y - prompt.getY());
@@ -250,7 +279,7 @@ public final class RaceScreen {
     /**
      * Redraws everything from the current race state.
      */
-    public void render() {
+    private void render() {
         camera.update(followed);
         world.updateCars(warnedRival());
         updatePrompt();
@@ -260,16 +289,6 @@ public final class RaceScreen {
         hud.update(followed, Tuning.TIME_SPEEDS[speedIndex], paused);
         gauges.update(followed);
         hud.refreshBanner();
-    }
-
-    /**
-     * Feeds the debug overlay with this frame's timing.
-     *
-     * @param frameSeconds real time this frame took
-     * @param steps simulation steps run this frame
-     */
-    public void recordFrame(double frameSeconds, int steps) {
-        debug.record(frameSeconds, steps, program.getGCanvas());
     }
 
     /**
@@ -287,6 +306,7 @@ public final class RaceScreen {
      * @param keyCode the key, as a KeyEvent constant
      * @param shift whether Shift was held
      */
+    @Override
     public void handleKey(int keyCode, boolean shift) {
         switch (keyCode) {
             case KeyEvent.VK_SPACE:
@@ -305,7 +325,10 @@ public final class RaceScreen {
                 followed = race.getPlayerCar();
                 break;
             case KeyEvent.VK_R:
-                restartRequested = true;
+                manager.showSetup(race.getTrack().getProfile().getId());
+                break;
+            case KeyEvent.VK_ESCAPE:
+                manager.showMenu();
                 break;
             case KeyEvent.VK_Q:
                 race.getPlayerCar().setPushLevel(PushLevel.CONSERVE);
@@ -318,6 +341,19 @@ public final class RaceScreen {
                 break;
             case KeyEvent.VK_X:
                 race.getPlayerCar().setErsWanted(!race.getPlayerCar().isErsWanted());
+                break;
+            case KeyEvent.VK_B:
+                togglePitCall(1);
+                break;
+            case KeyEvent.VK_N:
+                togglePitCall(2);
+                break;
+            case KeyEvent.VK_1:
+            case KeyEvent.VK_2:
+            case KeyEvent.VK_3:
+            case KeyEvent.VK_4:
+            case KeyEvent.VK_5:
+                chooseCompound(Compound.values()[keyCode - KeyEvent.VK_1]);
                 break;
             case KeyEvent.VK_A:
                 race.getBattles().choosePlayerStance(Stance.ATTACK);
@@ -333,6 +369,49 @@ public final class RaceScreen {
                 break;
             default:
                 break;
+        }
+    }
+
+    /**
+     * Calls or cancels a pit stop for the player. Pressing the key again cancels the call (as long as
+     * the car has not reached the pit entry); cancelling the stop the plan called drops it from the plan.
+     *
+     * @param entries 1 to box this lap, 2 to box next lap
+     */
+    private void togglePitCall(int entries) {
+        Car player = race.getPlayerCar();
+        if (player.isInPitLane() || player.isFinished()) {
+            return;
+        }
+        PitStop planned = player.getPlan().nextStop();
+        if (player.getPitRequest() == entries) {
+            player.cancelPit();
+            if (planned != null && planned.getLap() <= player.getLapsCompleted() + 1) {
+                player.getPlan().removeNextStop();
+            }
+            race.addMessage("Copy, staying out. Box when you want with B.", true);
+            return;
+        }
+        Compound compound = player.getRequestedCompound();
+        if (player.getPitRequest() == 0) {
+            compound = planned != null ? planned.getCompound()
+                    : player.getTire().getCompound() == Compound.MEDIUM ? Compound.HARD : Compound.MEDIUM;
+        }
+        player.requestPit(entries, compound);
+        race.addMessage((entries == 1 ? "Box this lap" : "Box next lap") + " for " + compound.getDisplayName() + "s.", true);
+    }
+
+    /**
+     * Picks the tires for the player's pit call, or for the next planned stop if no stop is called.
+     *
+     * @param compound the compound
+     */
+    private void chooseCompound(Compound compound) {
+        Car player = race.getPlayerCar();
+        if (player.getPitRequest() > 0 && !player.isInPitLane()) {
+            player.setRequestedCompound(compound);
+        } else if (player.getPlan().nextStop() != null) {
+            player.getPlan().nextStop().setCompound(compound);
         }
     }
 
@@ -378,12 +457,4 @@ public final class RaceScreen {
         speedIndex = index;
     }
 
-    /**
-     * Returns whether the player asked for a new race.
-     *
-     * @return true after R was pressed
-     */
-    public boolean isRestartRequested() {
-        return restartRequested;
-    }
 }

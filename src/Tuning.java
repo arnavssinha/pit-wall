@@ -153,7 +153,7 @@ public final class Tuning {
     public static final double BATTLE_RESULT_SECONDS = 2.5;
 
     /** Race seconds after a player prompt before another prompt may appear. */
-    public static final double PROMPT_COOLDOWN_SECONDS = 10.0;
+    public static final double PROMPT_COOLDOWN_SECONDS = 20.0;
 
     /** A computer driver decides its stance for the next corner once within this gap of the car ahead. */
     public static final double INTENT_GAP_SECONDS = 2.0;
@@ -307,6 +307,39 @@ public final class Tuning {
 
     /** Chance a computer defender defends when no attack is coming. */
     public static final double AI_FALSE_DEFEND = 0.15;
+
+    /** Pit lane speed limit in m/s: 80 km/h, the limit at Monza and most circuits (sporting rule). */
+    public static final double PIT_SPEED_LIMIT = 80.0 / 3.6;
+
+    /** Sideways distance from the track centerline to the pit lane, in meters. Drawing choice. */
+    public static final double PIT_LANE_OFFSET = 13.0;
+
+    /** Sideways speed when moving into or out of the pit lane, in m/s. */
+    public static final double PIT_LATERAL_SPEED = 5.0;
+
+    /** Extra seconds of room a car leaving the pits keeps when judging whether it can merge. */
+    public static final double MERGE_MARGIN_SECONDS = 0.5;
+
+    /** Average time the crew needs to change four tires, in seconds (real stops take about 2 to 3 s). */
+    public static final double CREW_TIME_MEAN = 2.4;
+
+    /** Random spread of crew time, in seconds (standard deviation). Balance choice. */
+    public static final double CREW_TIME_SPREAD = 0.3;
+
+    /** Fastest possible crew time, in seconds. */
+    public static final double CREW_TIME_MIN = 1.9;
+
+    /** Dry-race rule: a car must use two different dry compounds or be disqualified (brief, default on). */
+    public static final boolean TWO_COMPOUND_RULE = true;
+
+    /** Share of computer drivers on the one-stop-early strategy. Balance choice. */
+    public static final double AI_SHARE_ONE_STOP_EARLY = 0.35;
+
+    /** Share of computer drivers on the one-stop-late strategy (the rest two-stop). Balance choice. */
+    public static final double AI_SHARE_ONE_STOP_LATE = 0.4;
+
+    /** Computer drivers make an unplanned stop at this tire wear. Balance choice. */
+    public static final double AI_EMERGENCY_WEAR = 0.97;
 
     /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
     public static final double PROFILE_GRIP_STEP = 0.004;

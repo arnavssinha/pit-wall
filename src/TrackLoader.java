@@ -36,6 +36,9 @@ public final class TrackLoader {
                 number(props, "medianRaceLapSeconds", id),
                 number(props, "trackWearMultiplier", id),
                 number(props, "overtakingDifficulty", id),
+                number(props, "pitEntryDistance", id),
+                number(props, "pitExitDistance", id),
+                (int) number(props, "pitSide", id),
                 required(props, "difficultyLabel", id),
                 required(props, "description", id),
                 required(props, "dataSource", id));
@@ -49,6 +52,25 @@ public final class TrackLoader {
             fromLine.add(points.get((startIndex + i) % points.size()));
         }
         return new Track(profile, fromLine);
+    }
+
+    /**
+     * Lists the ids of all tracks in data/tracks/tracks.txt, in menu order.
+     *
+     * @return track ids
+     * @throws IOException if the list cannot be read
+     */
+    public static List<String> listTrackIds() throws IOException {
+        List<String> ids = new ArrayList<String>();
+        try (BufferedReader reader = DataFiles.open("data/tracks/tracks.txt")) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!DataFiles.isSkippable(line)) {
+                    ids.add(line.trim());
+                }
+            }
+        }
+        return ids;
     }
 
     /**

@@ -31,21 +31,30 @@ you make the strategy calls.
 | Q / W / E | Push level: Conserve / Balanced / Push |
 | X | ERS deploy on or off (spends the battery on straights for extra speed) |
 | A / S / D | In a battle: Attack / Defend / Hold (or click the buttons). Pressed outside a battle, it pre-selects your stance for the next one |
+| B | Box this lap (press again to cancel). Your plan also calls its stops automatically |
+| N | Box next lap |
+| 1-5 | Tires for the stop: Soft, Medium, Hard, Intermediate, Wet |
+| Esc | Back to the menu |
 | Space | Pause or resume |
 | T | Change time speed: 1x, 2x, 4x, 8x (starts at 2x) |
 | Z | Switch between follow camera and whole-track view |
 | F | Camera follows the next car down the order (Shift-F: the car ahead) |
 | G | Camera goes back to your car |
-| R | Restart with a new random race |
+| R | New race (back to the setup screen) |
 | F3 | Show or hide the debug overlay (frames per second and object count) |
 
-## What is in the game so far (M1)
+## How a race works
 
-- A random driver from the 2026 roster is assigned to you, on a random grid slot (simulated qualifying comes in M3).
-- All 22 cars drive themselves from a standing start: they accelerate, brake before corners and corner
-  at a speed limited by grip and downforce. Cars queue behind slower cars; overtaking arrives with battles in M4.
-- Timing tower with live gaps to the leader, lap counter, race clock, minimap, follow and whole-track cameras.
-- Later milestones add tires, push levels, battles, pit stops, weather, results and the Strategy Lab.
+1. **Menu, then Track Select** (Monza for now), **then Setup.** On the setup screen you see which driver
+   you were given and where they start (from a simulated qualifying session). You pick a strategy
+   (one-stop early, one-stop late or two-stop), the tires for each stint, the number of cars (10 to 22)
+   and your baseline push level. Undo (U) takes back strategy edits.
+2. **The race.** The car drives itself. Watch the gauges and adjust the push level (Q/W/E). When a rival
+   is close at a braking zone, time slows down and you choose Attack, Defend or Hold (A/S/D).
+   A red triangle over a rival means they are about to attack you.
+3. **Pit stops.** Your plan calls its stops automatically (the radio tells you). Press B to cancel or to
+   box early, N to box next lap, and 1-5 to change the tires. In a dry race you must use two different
+   dry compounds or you are disqualified.
 
 ## Where the data comes from
 

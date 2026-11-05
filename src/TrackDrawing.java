@@ -51,6 +51,16 @@ public final class TrackDrawing {
     }
 
     /**
+     * Converts a sideways offset in meters to drawing units, on the widened drawn track.
+     *
+     * @param meters sideways offset in meters
+     * @return the same offset in drawing units
+     */
+    public static double lateralToDrawing(double meters) {
+        return meters * LATERAL_SCALE;
+    }
+
+    /**
      * Drawing x of a point on the track.
      *
      * @param distance distance along the lap in meters

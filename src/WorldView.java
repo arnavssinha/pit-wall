@@ -41,6 +41,21 @@ public final class WorldView extends GCompound {
     /** Height of each mowed-grass stripe, in drawing units. */
     private static final double GRASS_STRIPE = 60.0;
 
+    /** Width of the pit lane in drawing units. */
+    private static final double PIT_LANE_WIDTH = 11.0;
+
+    /** Length of the pit entry and exit ramps in meters. */
+    private static final double PIT_RAMP_LENGTH = 140.0;
+
+    /** Distance between garages along the pit lane, in meters. */
+    private static final double GARAGE_SPACING = 18.0;
+
+    /** Length of a garage along the pit lane, in meters. */
+    private static final double GARAGE_LENGTH = 12.0;
+
+    /** Depth of a garage away from the pit lane, in drawing units. */
+    private static final double GARAGE_DEPTH = 8.0;
+
     /** Number of squares across the chequered start line. */
     private static final int CHECKER_SQUARES = 10;
 
@@ -65,6 +80,7 @@ public final class WorldView extends GCompound {
         addGrassStripes();
         addRunoff();
         addGravel();
+        addPitLane(race);
         addAsphalt();
         addKerbs();
         addEdgeLines();
@@ -262,6 +278,102 @@ public final class WorldView extends GCompound {
      */
     private boolean isStraight(int index) {
         return Math.abs(drawing.getTrack().getSample(index).getCurvature()) < Tuning.CORNER_CURVATURE / 2;
+    }
+
+    /**
+     * Draws the pit lane beside the main straight: an entry ramp from the track edge, the lane itself,
+     * an exit ramp back to the track, a white pit wall line, and a garage in each team's color.
+     *
+     * @param race the race, for the track profile and the teams
+     */
+    private void addPitLane(Race race) {
+        TrackProfile profile = drawing.getTrack().getProfile();
+        double lap = drawing.getTrack().getLapLength();
+        int side = profile.getPitSide();
+        double center = side * TrackDrawing.lateralToDrawing(Tuning.PIT_LANE_OFFSET);
+        double half = PIT_LANE_WIDTH / 2;
+        double edge = side * (TrackDrawing.TRACK_WIDTH / 2);
+        double entry = profile.getPitEntryDistance();
+        double exit = profile.getPitExitDistance() + (profile.getPitExitDistance() < entry ? lap : 0);
+
+        rampStrip(entry, entry + PIT_RAMP_LENGTH, edge, center, half);
+        rampStrip(exit, exit + PIT_RAMP_LENGTH, center, edge, half);
+        GPolygon lane = offsetStrip(entry + PIT_RAMP_LENGTH, exit, center - half, center + half);
+        lane.setFillColor(Palette.PIT_LANE);
+        lane.setColor(Palette.PIT_LANE);
+        add(lane);
+        double wall = center - side * (half + 1.0);
+        GPolygon wallLine = offsetStrip(entry + PIT_RAMP_LENGTH, exit, wall - 0.4, wall + 0.4);
+        wallLine.setFillColor(Palette.EDGE_LINE);
+        wallLine.setColor(Palette.EDGE_LINE);
+        add(wallLine);
+
+        List<Team> teams = new ArrayList<Team>();
+        for (Car car : race.getCars()) {
+            if (!teams.contains(car.getDriver().getTeam())) {
+                teams.add(car.getDriver().getTeam());
+            }
+        }
+        double start = -GARAGE_SPACING * (teams.size() - 1) / 2.0;
+        double outer = center + side * half;
+        for (int i = 0; i < teams.size(); i++) {
+            double d = start + i * GARAGE_SPACING;
+            add(band(d - GARAGE_LENGTH / 2, GARAGE_LENGTH, outer, outer + side * GARAGE_DEPTH,
+                    Palette.teamColor(teams.get(i))));
+        }
+    }
+
+    /**
+     * Builds a strip whose sideways position slides from one offset to another along its length,
+     * used for the pit entry and exit ramps.
+     *
+     * @param from start distance in meters (may be past one lap)
+     * @param to end distance in meters
+     * @param startOffset center offset at the start, drawing units
+     * @param endOffset center offset at the end, drawing units
+     * @param half half the strip width, drawing units
+     */
+    private void rampStrip(double from, double to, double startOffset, double endOffset, double half) {
+        GPolygon poly = new GPolygon();
+        int steps = (int) Math.ceil((to - from) / drawing.getTrack().getSpacing());
+        for (int i = 0; i <= steps; i++) {
+            double t = i / (double) steps;
+            double d = from + (to - from) * t;
+            double c = startOffset + (endOffset - startOffset) * t;
+            poly.addVertex(drawing.offsetX(d, c + half), -drawing.offsetY(d, c + half));
+        }
+        for (int i = steps; i >= 0; i--) {
+            double t = i / (double) steps;
+            double d = from + (to - from) * t;
+            double c = startOffset + (endOffset - startOffset) * t;
+            poly.addVertex(drawing.offsetX(d, c - half), -drawing.offsetY(d, c - half));
+        }
+        poly.setFilled(true);
+        poly.setFillColor(Palette.PIT_LANE);
+        poly.setColor(Palette.PIT_LANE);
+        add(poly);
+    }
+
+    /**
+     * Builds a strip between two fixed sideways offsets over a stretch of track given by distance.
+     *
+     * @param from start distance in meters (may be past one lap)
+     * @param to end distance in meters
+     * @param inner one edge offset, drawing units
+     * @param outer other edge offset, drawing units
+     * @return the polygon, not yet added
+     */
+    private GPolygon offsetStrip(double from, double to, double inner, double outer) {
+        GPolygon poly = new GPolygon();
+        double step = drawing.getTrack().getSpacing();
+        for (double d = from; d <= to + 1e-6; d += step) {
+            poly.addVertex(drawing.offsetX(d, outer), -drawing.offsetY(d, outer));
+        }
+        for (double d = to; d >= from - 1e-6; d -= step) {
+            poly.addVertex(drawing.offsetX(d, inner), -drawing.offsetY(d, inner));
+        }
+        poly.setFilled(true);
+        return poly;
     }
 
     /**

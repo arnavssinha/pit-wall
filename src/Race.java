@@ -40,6 +40,12 @@ public final class Race {
     /** Runs the battles. */
     private final BattleManager battles;
 
+    /** Runs the pit stops. */
+    private final PitLane pitLane;
+
+    /** True once the track has been wet enough for slicks to struggle; the two-compound rule is then lifted. */
+    private boolean wetRace;
+
     /** Messages for the radio feed, oldest first. */
     private final ArrayList<RaceMessage> messages = new ArrayList<RaceMessage>();
 
@@ -79,11 +85,15 @@ public final class Race {
      *
      * @param config race settings
      * @param track the circuit
+     * Computer drivers get a random strategy; the player starts on the one-stop-late plan until
+     * setPlayerPlan is called from the setup screen.
+     *
+     * @param config race settings
+     * @param track the circuit
      * @param roster every available driver; must hold at least config.getCarCount() drivers
-     * @param startCompound tires every car starts on
      * @throws IllegalArgumentException if the roster is too small
      */
-    public Race(RaceConfig config, Track track, List<Driver> roster, Compound startCompound) {
+    public Race(RaceConfig config, Track track, List<Driver> roster) {
         if (roster.size() < config.getCarCount()) {
             throw new IllegalArgumentException("Roster has " + roster.size() + " drivers but "
                     + config.getCarCount() + " cars were requested");
@@ -95,6 +105,7 @@ public final class Race {
         this.conditions = TrackConditions.neutral();
         this.corners = Corner.findAll(track, profiles.forCarGrip(Compound.MEDIUM.getDryGrip()));
         this.battles = new BattleManager(this, random);
+        this.pitLane = new PitLane(this, random);
 
         ArrayList<Driver> field = new ArrayList<Driver>(roster);
         Collections.shuffle(field, random);
@@ -106,7 +117,10 @@ public final class Race {
             double gridDistance = -(Tuning.GRID_FIRST_SLOT_OFFSET + i * Tuning.GRID_SLOT_SPACING);
             double gridLateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
             boolean isPlayer = entry.getDriver() == playerDriver;
-            Car car = new Car(i, entry.getDriver(), i + 1, entry.getPace(), gridDistance, gridLateral, startCompound, isPlayer);
+            PitPlan plan = isPlayer ? StrategyPreset.ONE_STOP_LATE.makePlan() : PitStrategyPlanner.choosePlan(random);
+            Car car = new Car(i, entry.getDriver(), i + 1, entry.getPace(), gridDistance, gridLateral,
+                    plan.getStartCompound(), isPlayer);
+            car.setPlan(plan);
             double spread = Tuning.AI_AGGRESSION_MAX - Tuning.AI_AGGRESSION_MIN;
             car.setAggression(Tuning.AI_AGGRESSION_MIN + random.nextDouble() * spread);
             cars.add(car);
@@ -159,6 +173,10 @@ public final class Race {
             }
         }
         battles.beforeMove();
+        pitLane.beforeMove();
+        if (conditions.wetnessAt(0) > Tuning.SLICK_WET_CLIFF) {
+            wetRace = true;
+        }
         double[] moves = new double[n];
         for (int i = 0; i < n; i++) {
             moves[i] = planMove(cars.get(i), dt);
@@ -167,6 +185,7 @@ public final class Race {
             Car car = cars.get(i);
             double before = car.getDistance();
             car.advance(moves[i], dt);
+            pitLane.afterMove(car, before, before + moves[i], dt);
             car.updateSystems(dt, moves[i], track, profiles, conditions, wantsDeploy(car));
             recordCrossings(car, before, moves[i], dt);
         }
@@ -186,7 +205,7 @@ public final class Race {
      * @return meters to move, never negative
      */
     private double planMove(Car car, double dt) {
-        double target = car.targetSpeed(profiles, conditions);
+        double target = Math.min(car.targetSpeed(profiles, conditions), pitLane.speedLimit(car));
         Car partner = car.getPassPartner();
         if (partner != null && car.isPassAttacker()) {
             target = Math.max(target * (1 + Tuning.PASS_SPEED_BONUS), partner.getSpeed() + Tuning.PASS_MIN_CLOSING);
@@ -269,8 +288,9 @@ public final class Race {
     }
 
     /**
-     * Finds the car that limits how far a car may move: the nearest car ahead on the road,
-     * except a passing partner that is already far enough to the side to be alongside safely.
+     * Finds the car that limits how far a car may move: the nearest car ahead on the road, except a
+     * car that is far enough to the side to be alongside safely, which is allowed only for a passing
+     * partner, or for one car in the pit lane next to one on track (two pit-lane cars queue).
      *
      * @param car the car
      * @return the blocking car, or null
@@ -279,7 +299,8 @@ public final class Race {
         Car best = null;
         double bestGap = Double.MAX_VALUE;
         for (Car other : cars) {
-            if (other == car || (other == car.getPassPartner() && sideBySide(car, other))) {
+            boolean mayBeAlongside = other == car.getPassPartner() || car.isInPitLane() != other.isInPitLane();
+            if (other == car || (mayBeAlongside && sideBySide(car, other))) {
                 continue;
             }
             double gap = trackGap(car, other);
@@ -404,8 +425,66 @@ public final class Race {
             if (car.getLapsCompleted() >= config.getLaps() || finishedCount > 0) {
                 finishedCount++;
                 car.finish(crossTime, finishedCount);
+                checkCompoundRule(car);
             }
         }
+    }
+
+    /**
+     * Disqualifies a finished car that raced a dry race on only one dry compound.
+     *
+     * @param car a car that has just finished
+     */
+    private void checkCompoundRule(Car car) {
+        if (Tuning.TWO_COMPOUND_RULE && !wetRace && car.dryCompoundsUsed() < 2) {
+            car.disqualify();
+            String who = car.isPlayer() ? "You are" : car.getDriver().getCode() + " is";
+            addMessage(who + " disqualified: only one dry compound used", car.isPlayer());
+        }
+    }
+
+    /**
+     * Returns the final classification: finishing order, with disqualified cars moved to the end.
+     *
+     * @return cars in classified order
+     */
+    public List<Car> getClassification() {
+        List<Car> result = new ArrayList<Car>();
+        for (Car car : standings) {
+            if (!car.isDisqualified()) {
+                result.add(car);
+            }
+        }
+        for (Car car : standings) {
+            if (car.isDisqualified()) {
+                result.add(car);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Gives the player a tire strategy before the start (from the setup screen).
+     *
+     * @param plan the player's plan
+     * @param push the player's baseline push level
+     * @throws IllegalStateException if the race has already started
+     */
+    public void setPlayerPlan(PitPlan plan, PushLevel push) {
+        if (time > 0) {
+            throw new IllegalStateException("The plan can only be set before the start");
+        }
+        playerCar.setPlan(plan);
+        playerCar.setPushLevel(push);
+    }
+
+    /**
+     * Returns whether the race counts as wet (the two-compound rule no longer applies).
+     *
+     * @return true once the track has been properly wet
+     */
+    public boolean isWetRace() {
+        return wetRace;
     }
 
     /**

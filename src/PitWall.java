@@ -1,4 +1,3 @@
-import acm.graphics.GLabel;
 import acm.program.GraphicsProgram;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -9,8 +8,8 @@ import java.util.Locale;
 
 /**
  * Main class of Pit Wall, an F1 race strategy game drawn with the ACM graphics library.
- * It loads the data, builds the race screen and runs the main loop: read keys, run the
- * simulation steps this frame needs, redraw, then pause until the next frame (60 per second).
+ * It loads the data, opens the menu and runs the main loop: pass queued keys and clicks to the
+ * current screen, let the screen run one frame, then pause until the next frame (60 per second).
  * Start with --selftest to race for ten seconds, print frame rates and exit.
  */
 public final class PitWall extends GraphicsProgram {
@@ -23,9 +22,6 @@ public final class PitWall extends GraphicsProgram {
 
     /** Window height read by the ACM library; includes about 21 pixels for the ACM menu bar. */
     public static final int APPLICATION_HEIGHT = 742;
-
-    /** Track used until the track select screen exists (M5). */
-    private static final String TRACK_ID = "monza";
 
     /** Target frame time in milliseconds (60 frames per second). */
     private static final double FRAME_MS = 1000.0 / 60.0;
@@ -43,19 +39,10 @@ public final class PitWall extends GraphicsProgram {
      * Key presses and mouse clicks since the last frame. Filled by the input thread, emptied by the
      * game loop. A key is {code, shift}; a click is {CLICK, x, y}.
      */
-    private final transient ArrayDeque<int[]> pendingKeys = new ArrayDeque<int[]>();
+    private final transient ArrayDeque<int[]> pendingInput = new ArrayDeque<int[]>();
 
-    /** The track, loaded once. */
-    private transient Track track;
-
-    /** All drivers, loaded once. */
-    private transient List<Driver> roster;
-
-    /** The race currently on screen. */
-    private transient Race currentRace;
-
-    /** The current race screen. */
-    private transient RaceScreen screen;
+    /** Switches between screens. */
+    private transient ScreenManager screens;
 
     /**
      * Creates the program. The ACM library builds the window in start().
@@ -65,118 +52,116 @@ public final class PitWall extends GraphicsProgram {
     }
 
     /**
-     * Loads data and runs the game loop until the window is closed.
+     * Loads data, shows the menu (or starts the self-test race) and runs the game loop.
      */
     @Override
     public void run() {
-        setBackground(Palette.GRASS);
+        setBackground(Palette.SCREEN_BACK);
+        List<Driver> roster;
+        List<String> trackIds;
         try {
-            track = TrackLoader.load(TRACK_ID);
             roster = RosterLoader.load();
+            trackIds = TrackLoader.listTrackIds();
         } catch (IOException e) {
-            showError("Could not load game data: " + e.getMessage());
+            screens = new ScreenManager(this, getWidth(), getHeight(), null, null);
+            screens.showError("Could not load game data: " + e.getMessage());
             return;
         }
+        screens = new ScreenManager(this, getWidth(), getHeight(), roster, trackIds);
         addKeyListeners();
         addMouseListeners();
         getGCanvas().setFocusable(true);
         getGCanvas().requestFocusInWindow();
-        startRace(newSeed());
         try {
-            loop();
+            if (selfTest) {
+                runSelfTest(trackIds.get(0));
+            } else {
+                screens.showMenu();
+                loop();
+            }
         } catch (RuntimeException e) {
             e.printStackTrace();
             if (selfTest) {
                 System.out.println("SELFTEST FAILED: " + e);
                 System.exit(1);
             }
-            showError("Something went wrong: " + e);
+            screens.showError("Something went wrong: " + e);
         }
     }
 
     /**
-     * The main loop: one pass per frame.
+     * The main loop: one pass per frame, forever.
      */
     private void loop() {
         long last = System.nanoTime();
-        long selfTestStart = last;
-        int selfTestPhase = 0;
-        if (selfTest) {
-            screen.showDebug();
-        }
         while (true) {
             long now = System.nanoTime();
             double frameSeconds = (now - last) / 1e9;
             last = now;
-
-            handlePendingKeys();
-            if (screen.isRestartRequested()) {
-                startRace(newSeed());
-            }
-            int steps = screen.stepsForFrame(frameSeconds);
-            Race race = currentRace;
-            for (int i = 0; i < steps; i++) {
-                race.step();
-            }
-            screen.render();
-            screen.recordFrame(frameSeconds, steps);
-
-            if (selfTest) {
-                double elapsed = (System.nanoTime() - selfTestStart) / 1e9;
-                if (elapsed > SELFTEST_SECONDS_PER_SPEED * (selfTestPhase + 1)) {
-                    int speed = Tuning.TIME_SPEEDS[selfTestPhase == 0 ? Tuning.DEFAULT_TIME_SPEED_INDEX : Tuning.TIME_SPEEDS.length - 1];
-                    System.out.printf(Locale.ROOT, "SELFTEST %dx: %.1f FPS, race time %.1f s, objects %d%n",
-                            speed, screen.getFps(), race.getTime(), DebugOverlay.countObjects(getGCanvas()));
-                    selfTestPhase++;
-                    screen.setSpeedIndex(Tuning.TIME_SPEEDS.length - 1);
-                    if (selfTestPhase == 2) {
-                        System.out.println("SELFTEST OK: no exceptions");
-                        System.exit(0);
-                    }
-                }
-            }
-
+            runFrame(frameSeconds);
             double spentMs = (System.nanoTime() - now) / 1e6;
             pause(Math.max(1.0, FRAME_MS - spentMs));
         }
     }
 
     /**
-     * Clears the canvas and starts a fresh race with a new seed.
+     * Runs one frame of the current screen after handing it the queued input.
      *
-     * @param seed random seed for the race
+     * @param frameSeconds real time since the previous frame
      */
-    private void startRace(long seed) {
-        removeAll();
-        currentRace = new Race(new RaceConfig(Tuning.DEFAULT_CARS, Tuning.RACE_LAPS, seed), track, roster, Compound.MEDIUM);
-        screen = new RaceScreen(this, currentRace, getWidth(), getHeight());
+    private void runFrame(double frameSeconds) {
+        handlePendingInput();
+        Screen current = screens.getCurrent();
+        if (current != null) {
+            current.frame(frameSeconds);
+        }
     }
 
     /**
-     * Makes a short random seed (up to six digits) that is easy to read and type.
+     * Races for a few seconds at 2x and then at 8x with the debug overlay on, prints the frame rate
+     * for each, and exits.
      *
-     * @return the seed
+     * @param trackId the track to race on
      */
-    private static long newSeed() {
-        return Math.floorMod(System.nanoTime(), 1000000L);
-    }
-
-    /**
-     * Passes queued key presses to the screen. Runs on the game loop thread.
-     */
-    private void handlePendingKeys() {
-        while (true) {
-            int[] key;
-            synchronized (pendingKeys) {
-                key = pendingKeys.poll();
+    private void runSelfTest(String trackId) {
+        RaceScreen race = screens.startQuickRace(trackId, 1L);
+        race.showDebug();
+        int[] speeds = {Tuning.DEFAULT_TIME_SPEED_INDEX, Tuning.TIME_SPEEDS.length - 1};
+        for (int speedIndex : speeds) {
+            race.setSpeedIndex(speedIndex);
+            long start = System.nanoTime();
+            long last = start;
+            while ((System.nanoTime() - start) / 1e9 < SELFTEST_SECONDS_PER_SPEED) {
+                long now = System.nanoTime();
+                runFrame((now - last) / 1e9);
+                last = now;
+                pause(Math.max(1.0, FRAME_MS - (System.nanoTime() - now) / 1e6));
             }
-            if (key == null) {
+            System.out.printf(Locale.ROOT, "SELFTEST %dx: %.1f FPS, race time %.1f s, objects %d%n",
+                    Tuning.TIME_SPEEDS[speedIndex], race.getFps(), race.getRace().getTime(),
+                    DebugOverlay.countObjects(getGCanvas()));
+        }
+        System.out.println("SELFTEST OK: no exceptions");
+        System.exit(0);
+    }
+
+    /**
+     * Passes queued key presses and clicks to the current screen. Runs on the game loop thread.
+     */
+    private void handlePendingInput() {
+        while (true) {
+            int[] input;
+            synchronized (pendingInput) {
+                input = pendingInput.poll();
+            }
+            Screen current = screens.getCurrent();
+            if (input == null || current == null) {
                 return;
             }
-            if (key[0] == CLICK) {
-                screen.handleClick(key[1], key[2]);
+            if (input[0] == CLICK) {
+                current.handleClick(input[1], input[2]);
             } else {
-                screen.handleKey(key[0], key[1] == 1);
+                current.handleKey(input[0], input[1] == 1);
             }
         }
     }
@@ -189,8 +174,8 @@ public final class PitWall extends GraphicsProgram {
      */
     @Override
     public void keyPressed(KeyEvent e) {
-        synchronized (pendingKeys) {
-            pendingKeys.add(new int[] {e.getKeyCode(), e.isShiftDown() ? 1 : 0});
+        synchronized (pendingInput) {
+            pendingInput.add(new int[] {e.getKeyCode(), e.isShiftDown() ? 1 : 0});
         }
     }
 
@@ -201,23 +186,9 @@ public final class PitWall extends GraphicsProgram {
      */
     @Override
     public void mouseClicked(MouseEvent e) {
-        synchronized (pendingKeys) {
-            pendingKeys.add(new int[] {CLICK, e.getX(), e.getY()});
+        synchronized (pendingInput) {
+            pendingInput.add(new int[] {CLICK, e.getX(), e.getY()});
         }
-    }
-
-    /**
-     * Shows an error message on the canvas, because players who double-click the jar see no console.
-     *
-     * @param message the message
-     */
-    private void showError(String message) {
-        removeAll();
-        GLabel label = new GLabel(message, 30, 60);
-        label.setFont(Palette.HUD);
-        label.setColor(Palette.TEXT);
-        add(label);
-        System.err.println(message);
     }
 
     /**

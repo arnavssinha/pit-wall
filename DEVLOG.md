@@ -136,3 +136,27 @@ Screenshots show prompts, countdown, default stance, results and radio.
 **Not yet seen on screen:** a pass by the player car up close (the passing logic is covered by tests).
 
 **Next:** M5, pit stops, strategy and the setup screen.
+
+## M5 Pit stops, strategy and screens (2026-11-05)
+
+**Done**
+- `PitLane`: entry, box at the start/finish line, exit, 80 km/h limit, random crew time (about 2.4 s).
+  Cars merge back only when there is room for the whole merge. Pit loss comes out of the geometry
+  (about 20 s at Monza), not from a typed-in number. Cars in the pit lane queue among themselves.
+- `PitPlan`, `PitStop`, `StrategyPreset` (one-stop early, one-stop late, two-stop with suggested
+  compounds). `PitStrategyPlanner` gives computer drivers a random preset, calls planned stops, and makes
+  emergency stops at 97 percent wear. The player's plan calls its stops automatically; B cancels or
+  boxes early, N boxes next lap, 1-5 pick tires.
+- Two-compound rule (on by default): a dry-race finisher with one dry compound is disqualified and
+  classified last (`Race.getClassification`).
+- Screens: `ScreenManager` switches Menu, Track Select (cards with outlines from the data), Setup
+  (assignment from qualifying, preset, tires per stint with an undo Deque, car count, baseline push) and
+  Race. `ButtonGroup` maps buttons to actions with a HashMap.
+- Pit lane drawing: ramps, lane, pit wall, a garage per team.
+- Pacing: player prompts are at least 20 s of race time apart (the field often runs nose to tail).
+
+**Verified:** 23/23 tests (stop on planned lap with the right tires, pit cost 20.3 s, rule disqualifies a
+no-stop car, every computer car legal, presets legal). Self-test 59.5 FPS with about 950 objects. The full
+flow Menu, Track Select, Setup, Race and a pit stop were checked with screenshots.
+
+**Next:** M6, weather and events.

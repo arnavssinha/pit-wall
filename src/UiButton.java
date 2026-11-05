@@ -40,6 +40,16 @@ public final class UiButton extends GCompound {
     }
 
     /**
+     * Changes the button's text and centers it again.
+     *
+     * @param text the new label
+     */
+    public void setLabel(String text) {
+        label.setLabel(text);
+        label.setLocation((box.getWidth() - label.getWidth()) / 2, label.getY());
+    }
+
+    /**
      * Shows the button as chosen or not.
      *
      * @param highlighted true to highlight

@@ -61,6 +61,9 @@ public final class SimTests {
         check("corners found with braking zones and difficulty", () -> testCorners());
         check("pass chances: Monza-like high, Monaco-like very low", () -> testPassProbabilityBands());
         check("AI-only Monza races: pass rate in band", () -> testRacePassRate());
+        check("pit stop: on the planned lap, new tires, 15-35 s lost", () -> testPitStop());
+        check("two-compound rule disqualifies a no-stop car", () -> testCompoundRule());
+        check("every strategy preset meets the two-compound rule", () -> testPresetsLegal());
     }
 
     /**
@@ -258,8 +261,8 @@ public final class SimTests {
     private void testDeterminism() {
         Track track = monza();
         List<Driver> drivers = roster();
-        Race a = new Race(new RaceConfig(22, 3, 42L), track, drivers, Compound.MEDIUM);
-        Race b = new Race(new RaceConfig(22, 3, 42L), track, drivers, Compound.MEDIUM);
+        Race a = new Race(new RaceConfig(22, 3, 42L), track, drivers);
+        Race b = new Race(new RaceConfig(22, 3, 42L), track, drivers);
         runToEnd(a);
         runToEnd(b);
         for (int i = 0; i < a.getStandings().size(); i++) {
@@ -299,7 +302,7 @@ public final class SimTests {
      */
     private void testFullRaceInvariants() {
         Track track = monza();
-        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 7L), track, roster(), Compound.MEDIUM);
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 7L), track, roster());
         long start = System.currentTimeMillis();
         int steps = 0;
         double closest = Double.MAX_VALUE;
@@ -318,9 +321,10 @@ public final class SimTests {
                     }
                     double gap = race.trackGap(car, other);
                     if (gap < Tuning.MIN_SEPARATION - 1e-6) {
-                        require(Race.sideBySide(car, other) && car.getPassPartner() == other,
+                        boolean allowed = car.getPassPartner() == other || car.isInPitLane() != other.isInPitLane();
+                        require(Race.sideBySide(car, other) && allowed,
                                 "overlap: " + car.getDriver().getCode() + " is " + gap + " m behind "
-                                + other.getDriver().getCode() + " without being alongside in a pass");
+                                + other.getDriver().getCode() + " without being alongside (pass or pit lane)");
                         sideBySideSteps++;
                     } else {
                         closest = Math.min(closest, gap);
@@ -508,7 +512,7 @@ public final class SimTests {
      * Checks the grid is in qualifying order, every car is on it once, and exactly one car is the player's.
      */
     private void testQualifyingGrid() {
-        Race race = new Race(new RaceConfig(22, 10, 3L), monza(), roster(), Compound.MEDIUM);
+        Race race = new Race(new RaceConfig(22, 10, 3L), monza(), roster());
         List<QualifyingEntry> quali = race.getQualifying();
         int players = 0;
         for (int i = 0; i < race.getCars().size(); i++) {
@@ -541,7 +545,7 @@ public final class SimTests {
      * Checks Monza has several corners with braking zones, in lap order, with difficulty from 0 to 1.
      */
     private void testCorners() {
-        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster(), Compound.MEDIUM);
+        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster());
         List<Corner> corners = race.getCorners();
         require(corners.size() >= 5, "expected at least 5 braking corners, found " + corners.size());
         for (int i = 0; i < corners.size(); i++) {
@@ -558,7 +562,7 @@ public final class SimTests {
      * against a defender almost never works.
      */
     private void testPassProbabilityBands() {
-        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster(), Compound.MEDIUM);
+        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster());
         Car a = race.getCars().get(1);
         Car d = race.getCars().get(0);
         Corner corner = race.getCorners().get(0);
@@ -597,7 +601,7 @@ public final class SimTests {
         int attempts = 0;
         int passes = 0;
         for (long seed = 11; seed <= 13; seed++) {
-            Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, seed), monza(), roster(), Compound.MEDIUM);
+            Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, seed), monza(), roster());
             runToEnd(race);
             attempts += race.getBattles().getAttempts();
             passes += race.getBattles().getPasses();
@@ -607,5 +611,58 @@ public final class SimTests {
                 attempts, passes, rate * 100, passes / 3.0);
         require(rate > 0.25 && rate < 0.65, "pass success rate " + rate + " out of band");
         require(passes / 3.0 >= 10 && passes / 3.0 <= 70, "passes per race out of band");
+    }
+
+    /**
+     * Gives the player the one-stop-late plan, runs the race, and checks the stop happened at the
+     * end of lap 6 with Softs fitted, and that the lap with the stop lost a realistic amount of time.
+     */
+    private void testPitStop() {
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 21L), monza(), roster());
+        race.setPlayerPlan(StrategyPreset.ONE_STOP_LATE.makePlan(), PushLevel.BALANCED);
+        Car player = race.getPlayerCar();
+        int stopLap = 0;
+        while (!race.isOver()) {
+            race.step();
+            if (stopLap == 0 && player.getStopsMade() == 1) {
+                stopLap = player.getLapsCompleted();
+            }
+        }
+        require(player.getStopsMade() == 1, "player should stop once, stopped " + player.getStopsMade());
+        require(stopLap == 6, "stop should complete lap 6, completed lap " + stopLap);
+        require(player.getTire().getCompound() == Compound.SOFT, "Softs should be fitted after the stop");
+        double loss = race.getLapTime(player, 6) - race.getLapTime(player, 5)
+                + race.getLapTime(player, 7) - race.getLapTime(player, 8);
+        System.out.printf("      pit stop cost about %.1f s (laps 6 and 7 against laps 5 and 8)%n", loss);
+        require(loss > 15 && loss < 35, "pit loss out of range: " + loss);
+    }
+
+    /**
+     * Gives the player a plan with no stops; in a dry race that breaks the rule, so the player must be
+     * disqualified and classified last, while every computer car (on legal presets) is classified.
+     */
+    private void testCompoundRule() {
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 22L), monza(), roster());
+        race.setPlayerPlan(new PitPlan(Compound.HARD), PushLevel.BALANCED);
+        runToEnd(race);
+        List<Car> classification = race.getClassification();
+        require(race.getPlayerCar().isDisqualified(), "no-stop player should be disqualified");
+        require(classification.get(classification.size() - 1) == race.getPlayerCar(), "disqualified car should be last");
+        for (Car car : race.getCars()) {
+            if (!car.isPlayer()) {
+                require(!car.isDisqualified(), car.getDriver().getCode() + " broke the rule");
+                require(car.getStopsMade() >= 1, car.getDriver().getCode() + " never stopped");
+            }
+        }
+    }
+
+    /**
+     * Checks each strategy preset uses two different dry compounds.
+     */
+    private void testPresetsLegal() {
+        for (StrategyPreset preset : StrategyPreset.values()) {
+            require(preset.makePlan().usesTwoDryCompounds(), preset + " breaks the two-compound rule");
+        }
+        require(!new PitPlan(Compound.MEDIUM).usesTwoDryCompounds(), "a no-stop plan should fail the rule");
     }
 }

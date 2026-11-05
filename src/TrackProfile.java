@@ -25,6 +25,15 @@ public final class TrackProfile {
     /** How hard it is to overtake here, from 0 (easy) to 1 (almost impossible). */
     private final double overtakingDifficulty;
 
+    /** Distance along the lap of the pit entry, in meters. */
+    private final double pitEntryDistance;
+
+    /** Distance along the lap of the pit exit, in meters. */
+    private final double pitExitDistance;
+
+    /** Side of the track the pit lane is on: +1 left, -1 right (in the direction of travel). */
+    private final int pitSide;
+
     /** Difficulty label shown to the player. */
     private final String difficultyLabel;
 
@@ -44,12 +53,16 @@ public final class TrackProfile {
      * @param medianRaceLapSeconds typical race lap in seconds
      * @param trackWearMultiplier tire wear multiplier, 1.0 is neutral
      * @param overtakingDifficulty overtaking difficulty from 0 to 1
+     * @param pitEntryDistance pit entry distance along the lap in meters
+     * @param pitExitDistance pit exit distance along the lap in meters
+     * @param pitSide +1 for a pit lane on the left, -1 on the right
      * @param difficultyLabel difficulty label
      * @param description one-line description
      * @param dataSource note on where the data came from
      */
     public TrackProfile(String id, String name, String country, double lapLengthMeters,
-                        double medianRaceLapSeconds, double trackWearMultiplier, double overtakingDifficulty, String difficultyLabel, String description,
+                        double medianRaceLapSeconds, double trackWearMultiplier, double overtakingDifficulty,
+                        double pitEntryDistance, double pitExitDistance, int pitSide, String difficultyLabel, String description,
                         String dataSource) {
         this.id = id;
         this.name = name;
@@ -58,6 +71,9 @@ public final class TrackProfile {
         this.medianRaceLapSeconds = medianRaceLapSeconds;
         this.trackWearMultiplier = trackWearMultiplier;
         this.overtakingDifficulty = overtakingDifficulty;
+        this.pitEntryDistance = pitEntryDistance;
+        this.pitExitDistance = pitExitDistance;
+        this.pitSide = pitSide;
         this.difficultyLabel = difficultyLabel;
         this.description = description;
         this.dataSource = dataSource;
@@ -124,6 +140,33 @@ public final class TrackProfile {
      */
     public double getOvertakingDifficulty() {
         return overtakingDifficulty;
+    }
+
+    /**
+     * Returns where the pit entry is.
+     *
+     * @return distance along the lap in meters
+     */
+    public double getPitEntryDistance() {
+        return pitEntryDistance;
+    }
+
+    /**
+     * Returns where the pit exit is.
+     *
+     * @return distance along the lap in meters
+     */
+    public double getPitExitDistance() {
+        return pitExitDistance;
+    }
+
+    /**
+     * Returns which side the pit lane is on.
+     *
+     * @return +1 left, -1 right
+     */
+    public int getPitSide() {
+        return pitSide;
     }
 
     /**

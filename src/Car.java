@@ -1,3 +1,5 @@
+import java.util.EnumSet;
+
 /**
  * One car in the race: who drives it, where it is, how fast it goes, and the state of its
  * tires, brakes and battery.
@@ -87,6 +89,33 @@ public final class Car {
     /** Seconds of time still to be lost from an incident or a defensive line. */
     private double timePenalty;
 
+    /** How fast the car moves sideways right now, in meters per second. */
+    private double lateralSpeed = Tuning.LATERAL_SPEED;
+
+    /** The car's tire strategy. */
+    private PitPlan plan;
+
+    /** Where the car is in a pit stop. */
+    private PitPhase pitPhase = PitPhase.NONE;
+
+    /** Pit entries until the car pits: 0 no stop requested, 1 the next entry, 2 the one after. */
+    private int pitRequest;
+
+    /** Tires to fit at the requested stop. */
+    private Compound requestedCompound;
+
+    /** Seconds the crew still needs while the car is stopped. */
+    private double crewTimer;
+
+    /** Number of pit stops made. */
+    private int stopsMade;
+
+    /** Every compound this car has raced on, for the two-compound rule. */
+    private final EnumSet<Compound> usedCompounds = EnumSet.noneOf(Compound.class);
+
+    /** True if the car was disqualified (for example, for breaking the two-compound rule). */
+    private boolean disqualified;
+
     /** Number of laps completed. */
     private int lapsCompleted;
 
@@ -129,6 +158,8 @@ public final class Car {
         this.distance = startDistance;
         this.lateralOffset = startLateral;
         this.tire = new Tire(startCompound);
+        this.usedCompounds.add(startCompound);
+        this.plan = new PitPlan(startCompound);
         this.player = player;
         this.speed = 0;
         this.currentTopSpeed = Tuning.TOP_SPEED;
@@ -193,7 +224,7 @@ public final class Car {
      */
     public void advance(double meters, double dt) {
         distance += meters;
-        double step = Tuning.LATERAL_SPEED * dt;
+        double step = lateralSpeed * dt;
         double toGo = lateralTarget - lateralOffset;
         if (Math.abs(toGo) <= step) {
             lateralOffset = lateralTarget;
@@ -215,7 +246,27 @@ public final class Car {
     public void beginPass(Car partner, boolean attacking, double lateral) {
         passPartner = partner;
         passAttacker = attacking;
-        lateralTarget = lateral;
+        setLateralTarget(lateral, Tuning.LATERAL_SPEED);
+    }
+
+    /**
+     * Sets where the car moves sideways and how fast.
+     *
+     * @param target sideways offset in meters, positive to the left
+     * @param speed sideways speed in meters per second
+     */
+    public void setLateralTarget(double target, double speed) {
+        lateralTarget = target;
+        lateralSpeed = speed;
+    }
+
+    /**
+     * Returns where the car is moving sideways to.
+     *
+     * @return sideways offset target in meters
+     */
+    public double getLateralTarget() {
+        return lateralTarget;
     }
 
     /**
@@ -224,7 +275,187 @@ public final class Car {
     public void endPass() {
         passPartner = null;
         passAttacker = false;
-        lateralTarget = 0;
+        setLateralTarget(0, Tuning.LATERAL_SPEED);
+    }
+
+    /**
+     * Asks to pit at a coming pit entry.
+     *
+     * @param entries 1 to pit at the next pit entry, 2 to pit at the one after
+     * @param compound tires to fit
+     */
+    public void requestPit(int entries, Compound compound) {
+        pitRequest = entries;
+        requestedCompound = compound;
+    }
+
+    /**
+     * Cancels a pit request (only possible before entering the pit lane).
+     */
+    public void cancelPit() {
+        pitRequest = 0;
+    }
+
+    /**
+     * Counts down a pit request when the car drives past a pit entry without stopping.
+     */
+    public void skipPitEntry() {
+        pitRequest--;
+    }
+
+    /**
+     * Returns the pit request.
+     *
+     * @return 0 for none, 1 for the next entry, 2 for the one after
+     */
+    public int getPitRequest() {
+        return pitRequest;
+    }
+
+    /**
+     * Returns the tires to fit at the requested stop.
+     *
+     * @return the compound, or null if never requested
+     */
+    public Compound getRequestedCompound() {
+        return requestedCompound;
+    }
+
+    /**
+     * Changes the tires to fit at the requested stop.
+     *
+     * @param compound the compound
+     */
+    public void setRequestedCompound(Compound compound) {
+        requestedCompound = compound;
+    }
+
+    /**
+     * Moves the car to a new pit phase.
+     *
+     * @param phase the new phase
+     */
+    public void setPitPhase(PitPhase phase) {
+        pitPhase = phase;
+        if (phase == PitPhase.IN_LANE) {
+            pitRequest = 0;
+        }
+    }
+
+    /**
+     * Returns the pit phase.
+     *
+     * @return the phase
+     */
+    public PitPhase getPitPhase() {
+        return pitPhase;
+    }
+
+    /**
+     * Returns whether the car is anywhere in the pit lane or merging out of it.
+     *
+     * @return true unless the phase is NONE
+     */
+    public boolean isInPitLane() {
+        return pitPhase != PitPhase.NONE;
+    }
+
+    /**
+     * Starts the crew's work.
+     *
+     * @param seconds how long the crew needs
+     */
+    public void startCrew(double seconds) {
+        crewTimer = seconds;
+        speed = 0;
+    }
+
+    /**
+     * Counts down the crew's work.
+     *
+     * @param dt time step in seconds
+     * @return true once the crew is finished
+     */
+    public boolean crewWork(double dt) {
+        crewTimer -= dt;
+        return crewTimer <= 0;
+    }
+
+    /**
+     * Records a completed stop.
+     */
+    public void countStop() {
+        stopsMade++;
+    }
+
+    /**
+     * Returns the number of stops made.
+     *
+     * @return stops
+     */
+    public int getStopsMade() {
+        return stopsMade;
+    }
+
+    /**
+     * Sets the tire strategy and fits its starting tires. Only meant before the start.
+     *
+     * @param newPlan the plan
+     */
+    public void setPlan(PitPlan newPlan) {
+        plan = newPlan;
+        tire = new Tire(newPlan.getStartCompound());
+        usedCompounds.clear();
+        usedCompounds.add(newPlan.getStartCompound());
+    }
+
+    /**
+     * Returns the tire strategy.
+     *
+     * @return the plan
+     */
+    public PitPlan getPlan() {
+        return plan;
+    }
+
+    /**
+     * Returns how many different dry compounds this car has raced on.
+     *
+     * @return count of dry compounds used
+     */
+    public int dryCompoundsUsed() {
+        int count = 0;
+        for (Compound c : usedCompounds) {
+            if (c.isDry()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Returns whether this car ever raced on rain tires.
+     *
+     * @return true if an Intermediate or Wet was fitted
+     */
+    public boolean usedRainTires() {
+        return usedCompounds.contains(Compound.INTERMEDIATE) || usedCompounds.contains(Compound.WET);
+    }
+
+    /**
+     * Disqualifies the car.
+     */
+    public void disqualify() {
+        disqualified = true;
+    }
+
+    /**
+     * Returns whether the car was disqualified.
+     *
+     * @return true if disqualified
+     */
+    public boolean isDisqualified() {
+        return disqualified;
     }
 
     /**
@@ -394,6 +625,7 @@ public final class Car {
      */
     public void fitTires(Compound compound) {
         tire = new Tire(compound);
+        usedCompounds.add(compound);
     }
 
     /**
