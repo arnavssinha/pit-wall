@@ -125,6 +125,15 @@ public final class Tuning {
     /** Allowed calibration error as a fraction of the target lap (brief: plus or minus 3 percent). */
     public static final double CALIBRATION_TOLERANCE = 0.03;
 
+    /** Random spread of qualifying laps around each car's pace, in seconds (standard deviation). Balance choice. */
+    public static final double QUALIFYING_NOISE_SECONDS = 0.15;
+
+    /** A car within this time gap behind another on a straight gets a slipstream (brief: about 1 s). */
+    public static final double SLIPSTREAM_GAP_SECONDS = 1.0;
+
+    /** Largest slipstream speed bonus, right behind the car ahead. Balance choice. */
+    public static final double SLIPSTREAM_MAX_BONUS = 0.025;
+
     /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
     public static final double PROFILE_GRIP_STEP = 0.004;
 

@@ -96,3 +96,17 @@ Hard 11.1 laps of life. Medium lap 2: Conserve 85.98, Balanced 85.22, Push 84.87
 by 0.6 s; at lap 9 the Soft is 7.6 s slower. Gauges and keys checked with screenshots.
 
 **Next:** M3, multi-car racing (qualifying grid, slipstream, lapped cars).
+
+## M3 Multi-car racing (2026-11-05)
+
+**Done**
+- Simulated qualifying (`QualifyingEntry`, sorted with a Comparator): each car's lap is the track's
+  reference lap divided by its race pace plus random noise; the sorted list is the grid. The player is a
+  random driver, so the starting slot varies. Car pace is still a small random spread per race (team pace
+  from data waits for M8).
+- Slipstream: within 1 s behind another car on a straight, a speed bonus of up to 2.5 percent.
+- Standing start, standings, gaps and the no-overlap rule carry over from M1.
+
+**Verified:** 17/17 tests (grid follows qualifying, one player car, slipstream bands).
+
+**Next:** M4, battles and corner calls.

@@ -24,6 +24,7 @@ sim Brakes.java
 sim Ers.java
 sim ProfileSet.java
 sim TrackConditions.java
+sim QualifyingEntry.java
 
 data DataFiles.java
 data TrackLoader.java

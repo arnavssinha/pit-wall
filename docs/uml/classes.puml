@@ -216,6 +216,7 @@ package sim <<Frame>> {
     -finishTime : double
     -finishPosition : int
     +targetSpeed(ProfileSet, TrackConditions) : double
+    +applyTow(double) : void
     +approachSpeed(double, double, double) : void
     +advance(double, double) : void
     +completeLap(double) : void
@@ -316,6 +317,15 @@ package sim <<Frame>> {
     +getWearFactor() : double
     +getHeat() : double
   }
+  class QualifyingEntry {
+    -driver : Driver
+    -pace : double
+    -lapTime : double
+    +QualifyingEntry(Driver, double, double)
+    +getDriver() : Driver
+    +getPace() : double
+    +getLapTime() : double
+  }
   class Race {
     -config : RaceConfig
     -track : Track
@@ -324,6 +334,7 @@ package sim <<Frame>> {
     -random : Random
     -cars : ArrayList<Car>
     -standings : ArrayList<Car>
+    -qualifying : List<QualifyingEntry>
     -playerCar : Car
     -lapTimes : double[][]
     -wearHistory : double[][]
@@ -333,6 +344,8 @@ package sim <<Frame>> {
     -finishedCount : int
     +Race(RaceConfig, Track, List<Driver>, Compound)
     +step() : void
+    +slipstreamFactor(double, double, boolean) : double
+    +getQualifying() : List<QualifyingEntry>
     +carAheadOnTrack(Car) : Car
     +trackGap(Car, Car) : double
     +gapToLeader(Car) : double
@@ -464,7 +477,7 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 66 constants
+    {static} 69 constants
   }
 }
 package data <<Frame>> {
@@ -505,11 +518,13 @@ PitWall --> Race
 PitWall --> RaceScreen
 ProfileSet --> Track
 ProfileSet --> SpeedProfile
+QualifyingEntry --> Driver
 Race --> RaceConfig
 Race --> Track
 Race --> ProfileSet
 Race --> TrackConditions
 Race --> Car
+Race --> QualifyingEntry
 RaceScreen --> Race
 RaceScreen --> WorldView
 RaceScreen --> Camera

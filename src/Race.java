@@ -34,6 +34,9 @@ public final class Race {
     /** Cars in race order, re-sorted after every step. */
     private final ArrayList<Car> standings = new ArrayList<Car>();
 
+    /** Simulated qualifying results, fastest first; this order is the grid. */
+    private final List<QualifyingEntry> qualifying;
+
     /** The car the player follows and engineers. */
     private final Car playerCar;
 
@@ -85,22 +88,49 @@ public final class Race {
 
         ArrayList<Driver> field = new ArrayList<Driver>(roster);
         Collections.shuffle(field, random);
-        int playerSlot = random.nextInt(config.getCarCount());
-        for (int i = 0; i < config.getCarCount(); i++) {
-            double pace = 1.0 + (random.nextDouble() * 2 - 1) * Tuning.PACE_NOISE;
+        Driver playerDriver = field.get(random.nextInt(config.getCarCount()));
+        qualifying = runQualifying(field.subList(0, config.getCarCount()), track);
+        Car player = null;
+        for (int i = 0; i < qualifying.size(); i++) {
+            QualifyingEntry entry = qualifying.get(i);
             double gridDistance = -(Tuning.GRID_FIRST_SLOT_OFFSET + i * Tuning.GRID_SLOT_SPACING);
             double gridLateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
-            Car car = new Car(i, field.get(i), i + 1, pace, gridDistance, gridLateral, startCompound, i == playerSlot);
+            boolean isPlayer = entry.getDriver() == playerDriver;
+            Car car = new Car(i, entry.getDriver(), i + 1, entry.getPace(), gridDistance, gridLateral, startCompound, isPlayer);
             cars.add(car);
             standings.add(car);
+            if (isPlayer) {
+                player = car;
+            }
         }
-        playerCar = cars.get(playerSlot);
+        playerCar = player;
 
         lapTimes = new double[cars.size()][config.getLaps()];
         wearHistory = new double[cars.size()][config.getLaps()];
         loopOrigin = -(Tuning.GRID_FIRST_SLOT_OFFSET + Tuning.MAX_CARS * Tuning.GRID_SLOT_SPACING);
         double timedDistance = (config.getLaps() + 1) * track.getLapLength() - loopOrigin;
         loopTimes = new double[cars.size()][(int) Math.ceil(timedDistance / Tuning.TIMING_LOOP_SPACING) + 1];
+    }
+
+    /**
+     * Simulated qualifying: draws each car's pace for this race, gives it a qualifying lap
+     * (reference lap divided by pace, plus random noise for how the lap went), then sorts the
+     * entries fastest first. The sorted list is the starting grid.
+     *
+     * @param drivers the drivers taking part
+     * @param track the track, for its reference lap time
+     * @return entries sorted fastest first
+     */
+    private List<QualifyingEntry> runQualifying(List<Driver> drivers, Track track) {
+        List<QualifyingEntry> entries = new ArrayList<QualifyingEntry>();
+        double referenceLap = track.getProfile().getMedianRaceLapSeconds();
+        for (Driver driver : drivers) {
+            double pace = 1.0 + (random.nextDouble() * 2 - 1) * Tuning.PACE_NOISE;
+            double lap = referenceLap / pace + random.nextGaussian() * Tuning.QUALIFYING_NOISE_SECONDS;
+            entries.add(new QualifyingEntry(driver, pace, lap));
+        }
+        Collections.sort(entries, (a, b) -> Double.compare(a.getLapTime(), b.getLapTime()));
+        return entries;
     }
 
     /**
@@ -139,6 +169,11 @@ public final class Race {
         double target = car.targetSpeed(profiles, conditions);
         Car ahead = carAheadOnTrack(car);
         double gap = ahead == null ? Double.MAX_VALUE : trackGap(car, ahead);
+        double tow = slipstreamFactor(gap, car.getSpeed(), onStraight(car));
+        if (tow > 1.0) {
+            target *= tow;
+            car.applyTow(tow);
+        }
         if (ahead != null) {
             double comfortable = Tuning.MIN_SEPARATION + car.getSpeed() * Tuning.FOLLOW_TIME_GAP;
             if (gap < comfortable) {
@@ -153,6 +188,47 @@ public final class Race {
             car.capSpeed(ahead.getSpeed());
         }
         return move;
+    }
+
+    /**
+     * Speed bonus from the slipstream: a car close behind another on a straight punches a smaller
+     * hole in the air, so it can go a little faster. The bonus is largest right behind the car
+     * ahead and fades to nothing at Tuning.SLIPSTREAM_GAP_SECONDS.
+     *
+     * @param gapMeters distance to the car ahead in meters
+     * @param speed own speed in m/s
+     * @param onStraight whether the car is on a straight
+     * @return speed multiplier, 1 when there is no slipstream
+     */
+    public static double slipstreamFactor(double gapMeters, double speed, boolean onStraight) {
+        if (!onStraight || speed <= 0) {
+            return 1.0;
+        }
+        double gapSeconds = gapMeters / speed;
+        if (gapSeconds >= Tuning.SLIPSTREAM_GAP_SECONDS) {
+            return 1.0;
+        }
+        return 1.0 + Tuning.SLIPSTREAM_MAX_BONUS * (1.0 - gapSeconds / Tuning.SLIPSTREAM_GAP_SECONDS);
+    }
+
+    /**
+     * Returns whether a car is on a straight, judged from the reference speed profile.
+     *
+     * @param car the car
+     * @return true on straights
+     */
+    private boolean onStraight(Car car) {
+        SpeedProfile reference = profiles.forCarGrip(Compound.MEDIUM.getDryGrip());
+        return reference.cornerLimitAt(track.indexAt(car.getDistance())) >= Tuning.STRAIGHT_FRACTION * Tuning.TOP_SPEED;
+    }
+
+    /**
+     * Returns the simulated qualifying results.
+     *
+     * @return entries, fastest first
+     */
+    public List<QualifyingEntry> getQualifying() {
+        return Collections.unmodifiableList(qualifying);
     }
 
     /**

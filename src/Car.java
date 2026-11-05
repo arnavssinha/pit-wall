@@ -125,6 +125,15 @@ public final class Car {
     }
 
     /**
+     * Raises this step's top speed when towed along in another car's slipstream.
+     *
+     * @param factor speed multiplier from the slipstream, 1 or more
+     */
+    public void applyTow(double factor) {
+        currentTopSpeed *= factor;
+    }
+
+    /**
      * Moves the speed toward a target, accelerating or braking within the car's limits,
      * and remembers how hard it braked (which heats the brakes and charges the battery).
      *

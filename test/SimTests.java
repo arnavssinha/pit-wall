@@ -56,6 +56,8 @@ public final class SimTests {
         check("Push is faster but wears more; Conserve the opposite", () -> testPushTradeOff());
         check("wet tires lose in the dry and win in the wet", () -> testWetTires());
         check("brakes fade only when hot; ERS stays in 0-100%", () -> testBrakesAndErs());
+        check("grid follows qualifying; player is on the grid", () -> testQualifyingGrid());
+        check("slipstream helps only close behind on straights", () -> testSlipstream());
     }
 
     /**
@@ -485,5 +487,38 @@ public final class SimTests {
             ers.update(Tuning.SIM_STEP_SECONDS, 40, false, true);
         }
         require(ers.getCharge() == 1.0, "battery should fill to exactly 100%");
+    }
+
+    /**
+     * Checks the grid is in qualifying order, every car is on it once, and exactly one car is the player's.
+     */
+    private void testQualifyingGrid() {
+        Race race = new Race(new RaceConfig(22, 10, 3L), monza(), roster(), Compound.MEDIUM);
+        List<QualifyingEntry> quali = race.getQualifying();
+        int players = 0;
+        for (int i = 0; i < race.getCars().size(); i++) {
+            Car car = race.getCars().get(i);
+            require(car.getGridPosition() == i + 1, "grid positions out of order");
+            require(car.getDriver() == quali.get(i).getDriver(), "grid does not follow qualifying at P" + (i + 1));
+            if (i > 0) {
+                require(quali.get(i).getLapTime() >= quali.get(i - 1).getLapTime(), "qualifying not sorted");
+            }
+            if (car.isPlayer()) {
+                players++;
+            }
+        }
+        require(players == 1 && race.getPlayerCar().isPlayer(), "exactly one player car expected");
+    }
+
+    /**
+     * Checks the slipstream bonus: none in corners or beyond the gap limit, biggest when closest.
+     */
+    private void testSlipstream() {
+        double speed = 80;
+        require(Race.slipstreamFactor(40, speed, false) == 1.0, "no slipstream in corners");
+        require(Race.slipstreamFactor(speed * 1.2, speed, true) == 1.0, "no slipstream beyond the gap limit");
+        double near = Race.slipstreamFactor(20, speed, true);
+        double far = Race.slipstreamFactor(60, speed, true);
+        require(near > far && far > 1.0, "closer should mean more slipstream");
     }
 }
