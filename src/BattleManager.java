@@ -56,6 +56,78 @@ public final class BattleManager {
         for (Car car : race.getCars()) {
             maybeOpen(car);
         }
+        for (Battle battle : open) {
+            if (battle.promptsPlayer() && battle.isPlayerLocked() && battle.getPlayerStance() == null) {
+                Car player = race.getPlayerCar();
+                boolean attacking = battle.getAttacker() == player;
+                Stance fallback = DefaultStancePolicy.playerDefault(player, battle.getGapSeconds(), attacking);
+                if (attacking) {
+                    battle.setAttackerStance(fallback);
+                } else {
+                    battle.setDefenderStance(fallback);
+                }
+            }
+            engage(battle);
+        }
+    }
+
+    /**
+     * Turns stances into visible moves as soon as they are known. An attacking car first tucks into
+     * the slipstream, then pulls out: down the inside of the coming corner for Inside, the other way
+     * for Outside, and the two cars may then run side by side. A computer attacker that finds the
+     * door already shut switches to the other side. A defending car moves across to cover the inside line. A
+     * car that holds simply stays on the racing line.
+     *
+     * @param battle the battle
+     */
+    private void engage(Battle battle) {
+        Car a = battle.getAttacker();
+        Car d = battle.getDefender();
+        int inside = battle.getCorner().getInsideSide();
+        Stance defence = battle.getDefenderStance();
+        if (defence != null && !battle.isDefenderEngaged()) {
+            battle.markDefenderEngaged();
+            if (defence == Stance.DEFEND) {
+                d.setLateralTarget(inside * Tuning.COVER_LATERAL, Tuning.COVER_SPEED);
+            }
+        }
+        Stance attack = battle.getAttackerStance();
+        boolean attacking = attack == Stance.ATTACK || attack == Stance.OUTSIDE;
+        if (attack != null && !battle.isAttackerEngaged()) {
+            battle.markAttackerEngaged();
+            if (attacking) {
+                a.beginPass(d, true, a.getLateralOffset());
+                a.returnToLine(Tuning.LATERAL_SPEED);
+                if (d.getPassPartner() == null) {
+                    d.pairWith(a);
+                }
+            }
+        }
+        if (attacking && !battle.isPulledOut() && a.getPassPartner() == d && timeToPullOut(battle)) {
+            battle.markPulledOut();
+            int side = attack == Stance.ATTACK ? inside : -inside;
+            boolean doorShut = Math.abs(d.getLateralOffset() - side * Tuning.PULL_OUT_LATERAL) < Tuning.LATERAL_CLEARANCE;
+            if (doorShut && !a.isPlayer()) {
+                side = -side;
+                battle.setAttackerStance(side == inside ? Stance.ATTACK : Stance.OUTSIDE);
+            }
+            a.setLateralTarget(side * Tuning.PULL_OUT_LATERAL, Tuning.LATERAL_SPEED);
+        }
+    }
+
+    /**
+     * Decides when an attacker leaves the slipstream: once it has closed right up on the car ahead,
+     * or when the braking point is close. Staying in the tow until then is how it builds up the speed
+     * to draw alongside.
+     *
+     * @param battle the battle
+     * @return true when it is time to pull out
+     */
+    private boolean timeToPullOut(Battle battle) {
+        Car a = battle.getAttacker();
+        double gap = gapSeconds(a, battle.getDefender());
+        double toBraking = (battle.getResolveAt() - a.getDistance()) / Math.max(1, a.getSpeed());
+        return gap < Tuning.PULL_OUT_GAP_SECONDS || toBraking < Tuning.PULL_OUT_BEFORE_BRAKING_SECONDS;
     }
 
     /**
@@ -72,12 +144,19 @@ public final class BattleManager {
         }
         for (Car car : race.getCars()) {
             Car partner = car.getPassPartner();
-            if (car.isPassAttacker() && partner != null) {
-                double ahead = race.trackGap(partner, car);
-                if (ahead >= Tuning.MIN_SEPARATION && ahead < race.getTrack().getLapLength() / 2) {
-                    partner.endPass();
-                    car.endPass();
-                }
+            if (!car.isPassAttacker() || partner == null) {
+                continue;
+            }
+            double half = race.getTrack().getLapLength() / 2;
+            double ahead = race.trackGap(partner, car);
+            double behind = race.trackGap(car, partner);
+            boolean clearAhead = car.isPassGranted() && ahead >= Tuning.MIN_SEPARATION && ahead < half;
+            boolean clearBehind = car.isPassAborting() && behind >= Tuning.MIN_SEPARATION && behind < half;
+            boolean broken = partner.isRetired() || car.isRetired() || partner.isInPitLane() || car.isInPitLane()
+                    || partner.isFinished() || car.isFinished();
+            if (clearAhead || clearBehind || broken) {
+                partner.endPass();
+                car.endPass();
             }
         }
     }
@@ -185,24 +264,50 @@ public final class BattleManager {
         if (battle.getDefenderStance() == null) {
             battle.setDefenderStance(DefaultStancePolicy.defenderStance(d, a, battle.getGapSeconds(), null, random));
         }
+        engage(battle);
         boolean attackerErs = usesErs(a);
         boolean defenderErs = battle.getDefenderStance() == Stance.DEFEND && usesErs(d);
         double wetness = race.getConditions().wetnessAt(battle.getCorner().getBrakingPoint());
         BattleOutcome outcome = BattleResolver.resolve(battle, a.getCurrentGrip(), d.getCurrentGrip(), attackerErs,
-                defenderErs, race.getTrack().getProfile().getOvertakingDifficulty(), wetness, random);
+                defenderErs, race.getTrack().getProfile().getOvertakingDifficulty(), wetness, overlap(a, d), random);
         applyCosts(battle, outcome, attackerErs, defenderErs);
-        if (battle.getAttackerStance() == Stance.ATTACK) {
+        boolean attacked = battle.getAttackerStance() == Stance.ATTACK || battle.getAttackerStance() == Stance.OUTSIDE;
+        if (attacked) {
             attempts++;
         }
         if (outcome == BattleOutcome.PASSED) {
             passes++;
-            startPass(a, d, battle.getCorner());
+            a.grantPass();
+            if (a.getPassPartner() == d) {
+                double attackerSide = Math.signum(a.getLateralTarget());
+                d.setLateralTarget(-attackerSide * Tuning.DEFENDER_LATERAL, Tuning.COVER_SPEED);
+            }
+        } else if (a.getPassPartner() == d) {
+            a.abortPass();
+        } else if (d.getPassPartner() == null && !d.isOffTrack()) {
+            d.returnToLine(Tuning.COVER_SPEED);
         }
         boolean aboutPlayer = a.isPlayer() || d.isPlayer();
         boolean quiet = outcome == BattleOutcome.NO_ATTEMPT && battle.getDefenderStance() != Stance.DEFEND;
         if ((aboutPlayer && !quiet) || outcome == BattleOutcome.CONTACT) {
             race.addMessage(battle.getMessage(), aboutPlayer);
         }
+    }
+
+    /**
+     * Measures how far alongside the attacker is. The minimum gap (Tuning.MIN_SEPARATION) is as close as
+     * cars may follow, so being exactly that far behind means nose to tail, right on the gearbox:
+     * that counts as 0. Level (alongside) counts as +1, and a further minimum gap back counts as -1.
+     *
+     * @param attacker the attacking car
+     * @param defender the defending car
+     * @return overlap from -1 to +1
+     */
+    private double overlap(Car attacker, Car defender) {
+        double half = race.getTrack().getLapLength() / 2;
+        double ahead = race.trackGap(defender, attacker);
+        double meters = ahead < half ? ahead : -race.trackGap(attacker, defender);
+        return Math.max(-1, Math.min(1, (meters + Tuning.MIN_SEPARATION) / Tuning.MIN_SEPARATION));
     }
 
     /**
@@ -219,6 +324,8 @@ public final class BattleManager {
         if (battle.getAttackerStance() == Stance.ATTACK) {
             a.getBrakes().addHeat(Tuning.ATTACK_BRAKE_HEAT);
             a.getTire().addWear(Tuning.ATTACK_TIRE_WEAR);
+        } else if (battle.getAttackerStance() == Stance.OUTSIDE) {
+            a.getTire().addWear(Tuning.ATTACK_TIRE_WEAR / 2);
         }
         if (battle.getDefenderStance() == Stance.DEFEND) {
             d.addTimePenalty(Tuning.DEFEND_TIME_COST);
@@ -266,7 +373,8 @@ public final class BattleManager {
     }
 
     /**
-     * Starts a pass: the attacker moves to the inside of the corner and the defender to the outside.
+     * Starts a granted pass for a car giving way: the faster car goes to the inside of the corner and
+     * the slower car moves to the outside.
      *
      * @param attacker the passing car
      * @param defender the car being passed
@@ -276,6 +384,7 @@ public final class BattleManager {
         int inside = corner.getInsideSide();
         attacker.beginPass(defender, true, inside * Tuning.PASS_LATERAL);
         defender.beginPass(attacker, false, -inside * Tuning.DEFENDER_LATERAL);
+        attacker.grantPass();
     }
 
     /**
@@ -352,6 +461,15 @@ public final class BattleManager {
      * Calls off every open battle, for example when the safety car comes out (no overtaking).
      */
     public void cancelAll() {
+        for (Battle battle : open) {
+            Car a = battle.getAttacker();
+            Car d = battle.getDefender();
+            if (a.getPassPartner() == d) {
+                a.abortPass();
+            } else if (d.getPassPartner() == null && !d.isOffTrack()) {
+                d.returnToLine(Tuning.COVER_SPEED);
+            }
+        }
         open.clear();
         if (playerBattle != null && !playerBattle.isResolved()) {
             playerBattle = null;

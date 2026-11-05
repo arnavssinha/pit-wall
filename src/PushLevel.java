@@ -6,13 +6,13 @@
 public enum PushLevel {
 
     /** Save tires: about 1.2 percent slower, tires wear about 25 percent slower. */
-    CONSERVE("Conserve", 0.988, 0.87, 0.85),
+    CONSERVE("Conserve", 0.988, 0.87, 0.90),
 
     /** The normal race pace everything else is tuned around. */
     BALANCED("Balanced", 1.000, 1.00, 1.00),
 
     /** Attack the lap: about 1 percent faster, tires wear about 40 percent faster. */
-    PUSH("Push", 1.010, 1.18, 1.15);
+    PUSH("Push", 1.010, 1.18, 1.08);
 
     /** Name shown to the player. */
     private final String displayName;

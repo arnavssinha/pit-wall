@@ -7,69 +7,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The scrolling, zooming world: grass, run-off, gravel, the track itself, and the cars.
- * Positions come from TrackDrawing in drawing units, then are multiplied by the zoom to get
- * pixels, with y flipped so north is up. Zooming calls GCompound.scale, which this acm.jar
- * applies to every child, so the static scenery never has to be rebuilt.
- * Static scenery is kept to a few hundred polygons: long strips are drawn in chunks of about
- * 200 m, and kerbs and gravel only where the track bends.
- * Drawing order (back to front): grass stripes, run-off, gravel, asphalt, kerbs, lines, cars.
+ * The scrolling, zooming world: striped grass, the track picture, the start line and grid marks,
+ * and the cars on top.
+ * Positions come from TrackDrawing in drawing units, then are multiplied by the zoom to get pixels,
+ * with y flipped so north is up. Zooming calls GCompound.scale, which this acm.jar applies to every
+ * child (including the track picture), so nothing static has to be rebuilt.
+ * Drawing order (back to front): grass stripes, track picture, start line and grid, cars.
  */
 public final class WorldView extends GCompound {
 
     /** Version tag required because ACM objects are serializable. */
     private static final long serialVersionUID = 1L;
 
-    /** Track samples per chunk polygon. */
-    private static final int CHUNK_SAMPLES = 40;
-
-    /** Width of a kerb strip in drawing units. */
-    private static final double KERB_WIDTH = 3.0;
-
-    /** Width of the paved run-off beside the track, in drawing units. */
-    private static final double RUNOFF_WIDTH = 10.0;
-
-    /** Width of the gravel traps on the outside of corners, in drawing units. */
-    private static final double GRAVEL_WIDTH = 22.0;
-
-    /**
-     * Samples a gravel trap may run on past the end of its corner, but only along straight track,
-     * so it never wraps into the next corner of a chicane.
-     */
-    private static final int GRAVEL_RUN_ON = 6;
-
     /** Height of each mowed-grass stripe, in drawing units. */
     private static final double GRASS_STRIPE = 60.0;
 
-    /** Width of the pit lane in drawing units. */
-    private static final double PIT_LANE_WIDTH = 11.0;
-
-    /** Length of the pit entry and exit ramps in meters. */
-    private static final double PIT_RAMP_LENGTH = 140.0;
-
-    /** Distance between garages along the pit lane, in meters. */
-    private static final double GARAGE_SPACING = 18.0;
-
-    /** Length of a garage along the pit lane, in meters. */
-    private static final double GARAGE_LENGTH = 12.0;
-
-    /** Depth of a garage away from the pit lane, in drawing units. */
-    private static final double GARAGE_DEPTH = 8.0;
+    /** How far the grass stripes reach beyond the track, in drawing units. */
+    private static final double GRASS_MARGIN = 4000.0;
 
     /** Number of squares across the chequered start line. */
     private static final int CHECKER_SQUARES = 10;
 
     /** Converts track meters to drawing units. */
     private final transient TrackDrawing drawing;
-
-    /** Asphalt chunks, so their color can show wetness. */
-    private final transient List<GPolygon> asphaltChunks = new ArrayList<GPolygon>();
-
-    /** Lap distance at the middle of each asphalt chunk. */
-    private final transient List<Double> chunkMiddles = new ArrayList<Double>();
-
-    /** Wetness level (in tenths) each chunk is drawn at. */
-    private final transient List<Integer> chunkLevels = new ArrayList<Integer>();
 
     /** One sprite per car. */
     private final transient List<CarSprite> sprites = new ArrayList<CarSprite>();
@@ -87,12 +47,7 @@ public final class WorldView extends GCompound {
         this.drawing = drawing;
         this.zoom = 1.0;
         addGrassStripes();
-        addRunoff();
-        addGravel();
-        addPitLane(race);
-        addAsphalt();
-        addKerbs();
-        addEdgeLines();
+        add(TrackRaster.build(drawing, teamsOf(race)));
         addStartLineAndGrid(race.getConfig().getCarCount());
         CarSprite playerSprite = null;
         for (Car car : race.getCars()) {
@@ -111,11 +66,28 @@ public final class WorldView extends GCompound {
     }
 
     /**
-     * Adds every part of a car sprite, plus its ring if it has one.
+     * Lists the teams in the race once each, in grid order, for the garages.
+     *
+     * @param race the race
+     * @return the teams
+     */
+    private static List<Team> teamsOf(Race race) {
+        List<Team> teams = new ArrayList<Team>();
+        for (Car car : race.getCars()) {
+            if (!teams.contains(car.getDriver().getTeam())) {
+                teams.add(car.getDriver().getTeam());
+            }
+        }
+        return teams;
+    }
+
+    /**
+     * Adds every part of a car sprite: its exhaust glow, ring (player only) and body parts.
      *
      * @param sprite the sprite
      */
     private void addSprite(CarSprite sprite) {
+        add(sprite.getGlow());
         GOval ring = sprite.getRing();
         if (ring != null) {
             add(ring);
@@ -179,51 +151,14 @@ public final class WorldView extends GCompound {
     }
 
     /**
-     * Adds a vertex at a sideways offset from the centerline to a polygon, at zoom 1.
-     *
-     * @param poly the polygon
-     * @param sample index of the centerline sample
-     * @param offset drawing units to the left of the direction of travel
-     */
-    private void addEdgeVertex(GPolygon poly, int sample, double offset) {
-        double d = drawing.getTrack().getSample(sample).getDistance();
-        poly.addVertex(drawing.offsetX(d, offset), -drawing.offsetY(d, offset));
-    }
-
-    /**
-     * Builds a filled strip between two sideways offsets over a range of samples.
-     *
-     * @param from first sample index
-     * @param to last sample index (may run past the end; it wraps)
-     * @param inner offset of one edge in drawing units
-     * @param outer offset of the other edge in drawing units
-     * @param color fill and outline color
-     * @return the polygon, already added
-     */
-    private GPolygon strip(int from, int to, double inner, double outer, Color color) {
-        GPolygon poly = new GPolygon();
-        for (int i = from; i <= to; i++) {
-            addEdgeVertex(poly, i, outer);
-        }
-        for (int i = to; i >= from; i--) {
-            addEdgeVertex(poly, i, inner);
-        }
-        poly.setFilled(true);
-        poly.setFillColor(color);
-        poly.setColor(color);
-        add(poly);
-        return poly;
-    }
-
-    /**
-     * Draws alternating light and dark grass bands across the whole area, like a mowed lawn.
+     * Draws alternating light and dark grass bands across a wide area, like a mowed lawn.
+     * The canvas background is the dark grass; only the light bands are added.
      */
     private void addGrassStripes() {
-        double margin = 4000;
-        double left = drawing.minX() - margin;
-        double width = drawing.maxX() - drawing.minX() + 2 * margin;
+        double left = drawing.minX() - GRASS_MARGIN;
+        double width = drawing.maxX() - drawing.minX() + 2 * GRASS_MARGIN;
         int stripe = 0;
-        for (double y = drawing.minY() - margin; y < drawing.maxY() + margin; y += GRASS_STRIPE) {
+        for (double y = drawing.minY() - GRASS_MARGIN; y < drawing.maxY() + GRASS_MARGIN; y += GRASS_STRIPE) {
             if (stripe % 2 == 1) {
                 GRect band = new GRect(left, -(y + GRASS_STRIPE), width, GRASS_STRIPE);
                 band.setFilled(true);
@@ -232,234 +167,6 @@ public final class WorldView extends GCompound {
                 add(band);
             }
             stripe++;
-        }
-    }
-
-    /**
-     * Draws the paved run-off area on both sides of the whole lap.
-     */
-    private void addRunoff() {
-        double outer = TrackDrawing.TRACK_WIDTH / 2 + KERB_WIDTH + RUNOFF_WIDTH;
-        int n = drawing.getTrack().getSampleCount();
-        for (int start = 0; start < n; start += CHUNK_SAMPLES) {
-            strip(start, start + CHUNK_SAMPLES + 1, -outer, outer, Palette.RUNOFF);
-        }
-    }
-
-    /**
-     * Draws gravel traps on the outside of each corner: one strip per run of bending samples.
-     * The outside of a left-hand bend is the right side, and the other way round.
-     */
-    private void addGravel() {
-        Track track = drawing.getTrack();
-        int n = track.getSampleCount();
-        double inner = TrackDrawing.TRACK_WIDTH / 2 + KERB_WIDTH + RUNOFF_WIDTH * 0.5;
-        int i = 0;
-        while (i < n) {
-            double k = track.getSample(i).getCurvature();
-            if (Math.abs(k) < Tuning.CORNER_CURVATURE) {
-                i++;
-                continue;
-            }
-            int start = i;
-            while (i < n && Math.abs(track.getSample(i).getCurvature()) >= Tuning.CORNER_CURVATURE
-                    && Math.signum(track.getSample(i).getCurvature()) == Math.signum(k)) {
-                i++;
-            }
-            int from = start;
-            while (from > start - GRAVEL_RUN_ON && isStraight(from - 1)) {
-                from--;
-            }
-            int to = i;
-            while (to < i + GRAVEL_RUN_ON && isStraight(to + 1)) {
-                to++;
-            }
-            double side = k > 0 ? -1 : 1;
-            strip(from, to, side * inner, side * (inner + GRAVEL_WIDTH), Palette.GRAVEL);
-        }
-    }
-
-    /**
-     * Returns whether a sample is on a near-straight part of the track.
-     *
-     * @param index sample index (wrapped)
-     * @return true if the bend there is gentler than a corner
-     */
-    private boolean isStraight(int index) {
-        return Math.abs(drawing.getTrack().getSample(index).getCurvature()) < Tuning.CORNER_CURVATURE / 2;
-    }
-
-    /**
-     * Draws the pit lane beside the main straight: an entry ramp from the track edge, the lane itself,
-     * an exit ramp back to the track, a white pit wall line, and a garage in each team's color.
-     *
-     * @param race the race, for the track profile and the teams
-     */
-    private void addPitLane(Race race) {
-        TrackProfile profile = drawing.getTrack().getProfile();
-        double lap = drawing.getTrack().getLapLength();
-        int side = profile.getPitSide();
-        double center = side * TrackDrawing.lateralToDrawing(Tuning.PIT_LANE_OFFSET);
-        double half = PIT_LANE_WIDTH / 2;
-        double edge = side * (TrackDrawing.TRACK_WIDTH / 2);
-        double entry = profile.getPitEntryDistance();
-        double exit = profile.getPitExitDistance() + (profile.getPitExitDistance() < entry ? lap : 0);
-
-        rampStrip(entry, entry + PIT_RAMP_LENGTH, edge, center, half);
-        rampStrip(exit, exit + PIT_RAMP_LENGTH, center, edge, half);
-        GPolygon lane = offsetStrip(entry + PIT_RAMP_LENGTH, exit, center - half, center + half);
-        lane.setFillColor(Palette.PIT_LANE);
-        lane.setColor(Palette.PIT_LANE);
-        add(lane);
-        double wall = center - side * (half + 1.0);
-        GPolygon wallLine = offsetStrip(entry + PIT_RAMP_LENGTH, exit, wall - 0.4, wall + 0.4);
-        wallLine.setFillColor(Palette.EDGE_LINE);
-        wallLine.setColor(Palette.EDGE_LINE);
-        add(wallLine);
-
-        List<Team> teams = new ArrayList<Team>();
-        for (Car car : race.getCars()) {
-            if (!teams.contains(car.getDriver().getTeam())) {
-                teams.add(car.getDriver().getTeam());
-            }
-        }
-        double start = -GARAGE_SPACING * (teams.size() - 1) / 2.0;
-        double outer = center + side * half;
-        for (int i = 0; i < teams.size(); i++) {
-            double d = start + i * GARAGE_SPACING;
-            add(band(d - GARAGE_LENGTH / 2, GARAGE_LENGTH, outer, outer + side * GARAGE_DEPTH,
-                    Palette.teamColor(teams.get(i))));
-        }
-    }
-
-    /**
-     * Builds a strip whose sideways position slides from one offset to another along its length,
-     * used for the pit entry and exit ramps.
-     *
-     * @param from start distance in meters (may be past one lap)
-     * @param to end distance in meters
-     * @param startOffset center offset at the start, drawing units
-     * @param endOffset center offset at the end, drawing units
-     * @param half half the strip width, drawing units
-     */
-    private void rampStrip(double from, double to, double startOffset, double endOffset, double half) {
-        GPolygon poly = new GPolygon();
-        int steps = (int) Math.ceil((to - from) / drawing.getTrack().getSpacing());
-        for (int i = 0; i <= steps; i++) {
-            double t = i / (double) steps;
-            double d = from + (to - from) * t;
-            double c = startOffset + (endOffset - startOffset) * t;
-            poly.addVertex(drawing.offsetX(d, c + half), -drawing.offsetY(d, c + half));
-        }
-        for (int i = steps; i >= 0; i--) {
-            double t = i / (double) steps;
-            double d = from + (to - from) * t;
-            double c = startOffset + (endOffset - startOffset) * t;
-            poly.addVertex(drawing.offsetX(d, c - half), -drawing.offsetY(d, c - half));
-        }
-        poly.setFilled(true);
-        poly.setFillColor(Palette.PIT_LANE);
-        poly.setColor(Palette.PIT_LANE);
-        add(poly);
-    }
-
-    /**
-     * Builds a strip between two fixed sideways offsets over a stretch of track given by distance.
-     *
-     * @param from start distance in meters (may be past one lap)
-     * @param to end distance in meters
-     * @param inner one edge offset, drawing units
-     * @param outer other edge offset, drawing units
-     * @return the polygon, not yet added
-     */
-    private GPolygon offsetStrip(double from, double to, double inner, double outer) {
-        GPolygon poly = new GPolygon();
-        double step = drawing.getTrack().getSpacing();
-        for (double d = from; d <= to + 1e-6; d += step) {
-            poly.addVertex(drawing.offsetX(d, outer), -drawing.offsetY(d, outer));
-        }
-        for (double d = to; d >= from - 1e-6; d -= step) {
-            poly.addVertex(drawing.offsetX(d, inner), -drawing.offsetY(d, inner));
-        }
-        poly.setFilled(true);
-        return poly;
-    }
-
-    /**
-     * Draws the asphalt as overlapping chunks so there are no hairline gaps between them.
-     */
-    private void addAsphalt() {
-        double half = TrackDrawing.TRACK_WIDTH / 2;
-        int n = drawing.getTrack().getSampleCount();
-        for (int start = 0; start < n; start += CHUNK_SAMPLES) {
-            asphaltChunks.add(strip(start, start + CHUNK_SAMPLES + 1, -half, half, Palette.ASPHALT));
-            chunkMiddles.add(drawing.getTrack().getSample(start + CHUNK_SAMPLES / 2).getDistance());
-            chunkLevels.add(0);
-        }
-    }
-
-    /**
-     * Darkens each asphalt chunk according to how wet that part of the track is, so the player can
-     * see where the track is still wet and where it has dried. Colors change in tenths to avoid
-     * repainting every frame.
-     *
-     * @param conditions the current weather
-     */
-    public void updateWetness(TrackConditions conditions) {
-        for (int i = 0; i < asphaltChunks.size(); i++) {
-            int level = (int) Math.round(conditions.wetnessAt(chunkMiddles.get(i)) * 10);
-            if (level != chunkLevels.get(i)) {
-                chunkLevels.set(i, level);
-                Color c = blend(Palette.ASPHALT, Palette.WET_ASPHALT, level / 10.0);
-                asphaltChunks.get(i).setFillColor(c);
-                asphaltChunks.get(i).setColor(c);
-            }
-        }
-    }
-
-    /**
-     * Mixes two colors.
-     *
-     * @param a first color
-     * @param b second color
-     * @param t share of the second color, from 0 to 1
-     * @return the mix
-     */
-    private static Color blend(Color a, Color b, double t) {
-        return new Color((int) (a.getRed() + (b.getRed() - a.getRed()) * t),
-                (int) (a.getGreen() + (b.getGreen() - a.getGreen()) * t),
-                (int) (a.getBlue() + (b.getBlue() - a.getBlue()) * t));
-    }
-
-    /**
-     * Draws red and white kerbs on both edges wherever the track bends sharply.
-     */
-    private void addKerbs() {
-        Track track = drawing.getTrack();
-        double half = TrackDrawing.TRACK_WIDTH / 2;
-        for (int i = 0; i < track.getSampleCount(); i++) {
-            if (Math.abs(track.getSample(i).getCurvature()) < Tuning.CORNER_CURVATURE) {
-                continue;
-            }
-            Color color = i % 2 == 0 ? Palette.KERB_RED : Palette.KERB_WHITE;
-            strip(i, i + 1, half, half + KERB_WIDTH, color);
-            strip(i, i + 1, -half, -(half + KERB_WIDTH), color);
-        }
-    }
-
-    /**
-     * Draws the two white edge lines as unfilled closed polygons around the whole lap.
-     */
-    private void addEdgeLines() {
-        double offset = TrackDrawing.TRACK_WIDTH / 2 - 0.5;
-        for (int side = -1; side <= 1; side += 2) {
-            GPolygon line = new GPolygon();
-            for (int i = 0; i < drawing.getTrack().getSampleCount(); i++) {
-                addEdgeVertex(line, i, side * offset);
-            }
-            line.setFilled(false);
-            line.setColor(Palette.EDGE_LINE);
-            add(line);
         }
     }
 
@@ -483,7 +190,7 @@ public final class WorldView extends GCompound {
             double d = -(Tuning.GRID_FIRST_SLOT_OFFSET + i * Tuning.GRID_SLOT_SPACING)
                     + TrackDrawing.CAR_LENGTH / (2 * TrackDrawing.LAYOUT_SCALE) + 1.0;
             double lateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
-            double center = lateral * TrackDrawing.TRACK_WIDTH / Tuning.TRACK_WIDTH;
+            double center = TrackDrawing.lateralToDrawing(lateral);
             add(band(d, 1.2, center - 3.0, center + 3.0, Palette.EDGE_LINE));
         }
     }

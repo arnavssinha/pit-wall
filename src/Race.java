@@ -140,10 +140,11 @@ public final class Race {
             double gridDistance = -(Tuning.GRID_FIRST_SLOT_OFFSET + i * Tuning.GRID_SLOT_SPACING);
             double gridLateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
             boolean isPlayer = entry.getDriver() == playerDriver;
-            PitPlan plan = isPlayer ? StrategyPreset.ONE_STOP_LATE.makePlan() : PitStrategyPlanner.choosePlan(random);
+            PitPlan plan = isPlayer ? defaultPlan(config.getLaps()) : PitStrategyPlanner.choosePlan(random, config.getLaps());
             Car car = new Car(i, entry.getDriver(), i + 1, entry.getPace(), gridDistance, gridLateral,
                     plan.getStartCompound(), isPlayer);
             car.setPlan(plan);
+            car.setTireLifeScale(RaceLength.tireLifeScale(config.getLaps()));
             double spread = Tuning.AI_AGGRESSION_MAX - Tuning.AI_AGGRESSION_MIN;
             car.setAggression(Tuning.AI_AGGRESSION_MIN + random.nextDouble() * spread);
             cars.add(car);
@@ -200,6 +201,11 @@ public final class Race {
             }
         }
         handleEvents();
+        if (Math.floor(time) != Math.floor(time - dt)) {
+            for (Car car : cars) {
+                car.updateForm(random.nextGaussian() * Tuning.FORM_STEP);
+            }
+        }
         conditions.update(dt, rain == null ? 0 : rain.intensityAt(time));
         if (conditions.averageWetness() > Tuning.SLICK_WET_CLIFF) {
             wetRace = true;
@@ -210,10 +216,20 @@ public final class Race {
         for (int i = 0; i < n; i++) {
             moves[i] = planMove(cars.get(i), dt);
         }
+        double[] lateralBefore = new double[n];
+        for (int i = 0; i < n; i++) {
+            lateralBefore[i] = cars.get(i).getLateralOffset();
+        }
         for (int i = 0; i < n; i++) {
             Car car = cars.get(i);
             double before = car.getDistance();
             car.advance(moves[i], dt);
+            car.steer(track.lineAt(car.getDistance()), moves[i], dt);
+        }
+        keepSideBySideRoom(lateralBefore);
+        for (int i = 0; i < n; i++) {
+            Car car = cars.get(i);
+            double before = car.getDistance() - moves[i];
             pitLane.afterMove(car, before, before + moves[i], dt);
             car.updateSystems(dt, moves[i], track, profiles, conditions, wantsDeploy(car));
             recordCrossings(car, before, moves[i], dt);
@@ -236,13 +252,45 @@ public final class Race {
     }
 
     /**
+     * Stops cars from sliding sideways into a car they are running alongside. Only the nearest cars
+     * on the road can overlap, so each car checks a few neighbours either side in the road order.
+     * For every pair that overlaps lengthwise and was clear sideways before this step, a car that moved too close is
+     * pushed back so the gap stays at least Tuning.LATERAL_CLEARANCE, on the side it was on.
+     *
+     * @param lateralBefore each car's sideways position before this step, by car id
+     */
+    private void keepSideBySideRoom(double[] lateralBefore) {
+        int n = roadOrder.size();
+        int reach = Math.min(Tuning.SIDE_BY_SIDE_NEIGHBOURS, n - 1);
+        for (Car car : cars) {
+            int index = roadIndex[car.getId()];
+            for (int k = -reach; k <= reach; k++) {
+                Car other = roadOrder.get(Math.floorMod(index + k, n));
+                if (other == car || car.isRetired() || other.isRetired()) {
+                    continue;
+                }
+                boolean overlapping = trackGap(car, other) < Tuning.MIN_SEPARATION
+                        || trackGap(other, car) < Tuning.MIN_SEPARATION;
+                double wasApart = lateralBefore[car.getId()] - lateralBefore[other.getId()];
+                if (!overlapping || Math.abs(wasApart) < Tuning.LATERAL_CLEARANCE) {
+                    continue;
+                }
+                double apart = car.getLateralOffset() - other.getLateralOffset();
+                if (Math.abs(apart) < Tuning.LATERAL_CLEARANCE || Math.signum(apart) != Math.signum(wasApart)) {
+                    car.nudgeLateral(other.getLateralOffset() + Math.signum(wasApart) * Tuning.LATERAL_CLEARANCE);
+                }
+            }
+        }
+    }
+
+    /**
      * Rolls this race's incidents at the start and puts them in the event queue: possibly a car
      * stopping on track (which brings out the safety car), and rare mechanical retirements.
      */
     private void scheduleIncidents() {
         double lap = track.getProfile().getMedianRaceLapSeconds();
-        double first = (Tuning.INCIDENT_FIRST_LAP - 1) * lap;
-        double span = (Tuning.INCIDENT_LAST_LAP - Tuning.INCIDENT_FIRST_LAP + 1) * lap;
+        double first = Tuning.INCIDENT_FIRST_FRACTION * config.getLaps() * lap;
+        double span = (Tuning.INCIDENT_LAST_FRACTION - Tuning.INCIDENT_FIRST_FRACTION) * config.getLaps() * lap;
         if (random.nextDouble() < track.getProfile().getSafetyCarProbability()) {
             Car victim = cars.get(random.nextInt(cars.size()));
             if (victim != playerCar) {
@@ -270,7 +318,9 @@ public final class Race {
                     addMessage("Rain has stopped. The track will start to dry.", true);
                     break;
                 case SAFETY_CAR:
-                    if (retire(car, "has stopped on track")) {
+                    if (!retire(car, "has stopped on track")) {
+                        retryLater(event);
+                    } else {
                         events.schedule(new RaceEvent(time + Tuning.SC_DEPLOY_DELAY + Tuning.SC_DURATION_SECONDS,
                                 RaceEvent.Type.SAFETY_CAR_END, null));
                         safetyCar.deploy();
@@ -283,9 +333,24 @@ public final class Race {
                     addMessage("Safety car is in. Green flag, racing resumes!", true);
                     break;
                 default:
-                    retire(car, "retires with a mechanical failure");
+                    if (!retire(car, "retires with a mechanical failure")) {
+                        retryLater(event);
+                    }
                     break;
             }
+        }
+    }
+
+    /**
+     * Tries an incident again a little later, when its car was busy (in the pit lane or mid-pass).
+     * Cars that have finished or already retired are left alone.
+     *
+     * @param event the incident
+     */
+    private void retryLater(RaceEvent event) {
+        Car car = event.getCar();
+        if (!car.isFinished() && !car.isRetired()) {
+            events.schedule(new RaceEvent(time + Tuning.INCIDENT_RETRY_SECONDS, event.getType(), car));
         }
     }
 
@@ -398,22 +463,34 @@ public final class Race {
             target *= safetyCar.paceFactor(car == leader(), gap);
         }
         Car partner = car.getPassPartner();
-        if (partner != null && car.isPassAttacker()) {
+        if (partner != null && car.isPassGranted()) {
             target = Math.max(target * (1 + Tuning.PASS_SPEED_BONUS), partner.getSpeed() + Tuning.PASS_MIN_CLOSING);
-        } else if (partner != null) {
+        } else if (partner != null && car.isPassAborting()) {
+            target *= 1 - Tuning.ABORT_SLOWDOWN;
+        } else if (partner != null && !car.isPassAttacker() && partner.isPassGranted()) {
             target *= 1 - Tuning.PASS_DEFENDER_SLOW;
         }
         double tow = slipstreamFactor(gap, car.getSpeed(), onStraight(car));
+        if (partner != null && car.isPassAttacker() && !car.isPassAborting()) {
+            double toPartner = trackGap(car, partner);
+            if (toPartner < track.getLapLength() / 2) {
+                tow = Math.max(tow, slipstreamFactor(toPartner, car.getSpeed(), onStraight(car)));
+            }
+        }
         if (tow > 1.0) {
             target *= tow;
             car.applyTow(tow);
         }
-        if (ahead != null) {
+        boolean attackingIt = ahead != null && ahead == partner && car.isPassAttacker() && !car.isPassAborting();
+        if (ahead != null && !attackingIt) {
             double comfortable = Tuning.MIN_SEPARATION + car.getSpeed() * Tuning.FOLLOW_TIME_GAP;
             if (gap < comfortable) {
                 target = Math.min(target, ahead.getSpeed());
             }
         }
+        boolean chasing = (partner != null && car.isPassAttacker() && !car.isPassAborting())
+                || (ahead != null && gap / Math.max(1, car.getSpeed()) < Tuning.SLIPSTREAM_GAP_SECONDS);
+        car.getErs().setOvertakeMode(chasing && !safetyCar.isActive());
         car.approachSpeed(target, profiles.getGripScale(), dt);
         double move = car.getSpeed() * dt;
         double room = gap - Tuning.MIN_SEPARATION;
@@ -427,7 +504,7 @@ public final class Race {
     /**
      * Speed bonus from the slipstream: a car close behind another on a straight punches a smaller
      * hole in the air, so it can go a little faster. The bonus is largest right behind the car
-     * ahead and fades to nothing at Tuning.SLIPSTREAM_GAP_SECONDS.
+     * ahead and fades (slowly at first, then quickly) to nothing at Tuning.SLIPSTREAM_GAP_SECONDS.
      *
      * @param gapMeters distance to the car ahead in meters
      * @param speed own speed in m/s
@@ -442,7 +519,8 @@ public final class Race {
         if (gapSeconds >= Tuning.SLIPSTREAM_GAP_SECONDS) {
             return 1.0;
         }
-        return 1.0 + Tuning.SLIPSTREAM_MAX_BONUS * (1.0 - gapSeconds / Tuning.SLIPSTREAM_GAP_SECONDS);
+        double t = gapSeconds / Tuning.SLIPSTREAM_GAP_SECONDS;
+        return 1.0 + Tuning.SLIPSTREAM_MAX_BONUS * (1.0 - t * t);
     }
 
     /**
@@ -610,12 +688,26 @@ public final class Race {
     }
 
     /**
+     * Returns the player's starting plan before the setup screen changes it: one-stop late where the
+     * race length allows it, otherwise the first strategy that fits.
+     *
+     * @param laps race length in laps
+     * @return a fresh plan
+     */
+    public static PitPlan defaultPlan(int laps) {
+        List<StrategyPreset> allowed = StrategyPreset.forRace(laps);
+        StrategyPreset preset = allowed.contains(StrategyPreset.ONE_STOP_LATE) && RaceLength.compoundRuleApplies(laps)
+                ? StrategyPreset.ONE_STOP_LATE : allowed.get(0);
+        return preset.makePlan(laps);
+    }
+
+    /**
      * Disqualifies a finished car that raced a dry race on only one dry compound.
      *
      * @param car a car that has just finished
      */
     private void checkCompoundRule(Car car) {
-        if (Tuning.TWO_COMPOUND_RULE && !wetRace && car.dryCompoundsUsed() < 2) {
+        if (RaceLength.compoundRuleApplies(config.getLaps()) && !wetRace && car.dryCompoundsUsed() < 2) {
             car.disqualify();
             String who = car.isPlayer() ? "You are" : car.getDriver().getCode() + " is";
             addMessage(who + " disqualified: only one dry compound used", car.isPlayer());

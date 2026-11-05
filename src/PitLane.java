@@ -56,8 +56,11 @@ public final class PitLane {
             }
             PitStrategyPlanner.callStops(car, race);
             if (car.getPitPhase() == PitPhase.MERGING) {
-                double target = canMerge(car) ? 0 : car.getLateralOffset();
-                car.setLateralTarget(target, Tuning.PIT_LATERAL_SPEED);
+                if (canMerge(car)) {
+                    car.returnToLine(Tuning.PIT_LATERAL_SPEED);
+                } else {
+                    car.setLateralTarget(car.getLateralOffset(), Tuning.PIT_LATERAL_SPEED);
+                }
             }
         }
     }
@@ -119,7 +122,7 @@ public final class PitLane {
                 }
                 break;
             default:
-                if (Math.abs(car.getLateralOffset()) < 0.01) {
+                if (car.isOnLine()) {
                     car.setPitPhase(PitPhase.NONE);
                 }
                 break;

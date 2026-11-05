@@ -75,10 +75,13 @@ public final class LabScreen implements Screen {
         this.manager = manager;
         this.track = track;
         this.lastRace = lastRace;
-        this.lab = new StrategyLab(track, manager.getRoster(), manager.weatherFor(track.getProfile().getId()), Tuning.DEFAULT_CARS);
+        int laps = lastRace != null ? lastRace.getRace().getConfig().getLaps() : RaceLength.RACE.getLaps();
+        this.lab = new StrategyLab(track, manager.getRoster(), manager.weatherFor(track.getProfile().getId()),
+                Tuning.DEFAULT_CARS, laps);
         GraphicsProgram p = manager.getProgram();
         p.add(Palette.background(manager.getWidth(), manager.getHeight()));
-        p.add(Palette.label("STRATEGY LAB  " + track.getProfile().getName().toUpperCase(Locale.ROOT), Palette.HEADLINE, Palette.TEXT), 40, 50);
+        p.add(Palette.label("STRATEGY LAB  " + track.getProfile().getName().toUpperCase(Locale.ROOT) + "   " + laps
+                + (laps == 1 ? " lap" : " laps"), Palette.HEADLINE, Palette.TEXT), 40, 50);
         p.add(Palette.label("Races every strategy on the same random grids, weather and incidents, with the computer driving your car.",
                 Palette.SMALL, Palette.TEXT_DIM), 42, 72);
         p.add(Palette.label("Enter: run   - / +: number of races   Esc: back", Palette.SMALL, Palette.TEXT_DIM), 42, 90);
@@ -212,10 +215,16 @@ public final class LabScreen implements Screen {
         p.add(Palette.label(String.format(Locale.ROOT, "rain / dry / hot / cool columns: average finish (number of races). Hot means track at or above %.0f C.",
                 r.getHotThreshold()), Palette.SMALL, Palette.TEXT_DIM), 54, 300);
 
-        String[] presetNames = new String[3];
-        double[] presetGains = new double[3];
-        String[] windowNames = new String[variants.size() - 3];
-        double[] windowGains = new double[variants.size() - 3];
+        int presetCount = 0;
+        for (StrategyVariant v : variants) {
+            if (!v.isWindow()) {
+                presetCount++;
+            }
+        }
+        String[] presetNames = new String[presetCount];
+        double[] presetGains = new double[presetCount];
+        String[] windowNames = new String[variants.size() - presetCount];
+        double[] windowGains = new double[variants.size() - presetCount];
         int pi = 0;
         int wi = 0;
         for (StrategyVariant v : variants) {
@@ -232,7 +241,9 @@ public final class LabScreen implements Screen {
                 Palette.GOOD, Palette.DANGER, false), 40, 330);
         StrategyVariant window = r.bestWindow();
         String windowTitle = "Pit window, Medium then Hard. Best: " + (window == null ? "-" : window.getName().toLowerCase(Locale.ROOT));
-        p.add(new BarChart(windowTitle, 600, 200, windowNames, windowGains, "%+.1f", Palette.GOOD, Palette.DANGER, false), 640, 330);
+        if (windowNames.length > 0) {
+            p.add(new BarChart(windowTitle, 600, 200, windowNames, windowGains, "%+.1f", Palette.GOOD, Palette.DANGER, false), 640, 330);
+        }
 
         p.add(Palette.panel(1200, 74), 40, 544);
         p.add(Palette.label("Best strategy here: " + best.getName() + String.format(Locale.ROOT,

@@ -49,11 +49,12 @@ public final class StrategyVariant {
     /**
      * Builds a fresh pit plan for one race.
      *
+     * @param laps race length in laps
      * @return the plan
      */
-    public PitPlan makePlan() {
+    public PitPlan makePlan(int laps) {
         if (preset != null) {
-            return preset.makePlan();
+            return preset.makePlan(laps);
         }
         PitPlan plan = new PitPlan(Compound.MEDIUM);
         plan.addStop(new PitStop(windowLap, Compound.HARD));

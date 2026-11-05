@@ -1,3 +1,4 @@
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -16,21 +17,29 @@ public final class PitStrategyPlanner {
     }
 
     /**
-     * Picks a strategy for a computer driver: one-stop early, one-stop late or two-stop, using the
-     * shares in Tuning.
+     * Picks a strategy for a computer driver. In a short race without the two-compound rule most
+     * drivers do not stop; otherwise they pick one-stop early, one-stop late or two-stop using the
+     * shares in Tuning (falling back to a strategy the race length allows).
      *
      * @param random the race's random generator
+     * @param laps race length in laps
      * @return a fresh plan
      */
-    public static PitPlan choosePlan(Random random) {
+    public static PitPlan choosePlan(Random random, int laps) {
+        List<StrategyPreset> allowed = StrategyPreset.forRace(laps);
         double roll = random.nextDouble();
-        if (roll < Tuning.AI_SHARE_ONE_STOP_EARLY) {
-            return StrategyPreset.ONE_STOP_EARLY.makePlan();
+        StrategyPreset wanted;
+        if (allowed.contains(StrategyPreset.NO_STOP)) {
+            wanted = roll < Tuning.AI_SHARE_NO_STOP ? StrategyPreset.NO_STOP : StrategyPreset.ONE_STOP_LATE;
+        } else if (roll < Tuning.AI_SHARE_ONE_STOP_EARLY) {
+            wanted = StrategyPreset.ONE_STOP_EARLY;
+        } else if (roll < Tuning.AI_SHARE_ONE_STOP_EARLY + Tuning.AI_SHARE_ONE_STOP_LATE) {
+            wanted = StrategyPreset.ONE_STOP_LATE;
+        } else {
+            wanted = StrategyPreset.TWO_STOP;
         }
-        if (roll < Tuning.AI_SHARE_ONE_STOP_EARLY + Tuning.AI_SHARE_ONE_STOP_LATE) {
-            return StrategyPreset.ONE_STOP_LATE.makePlan();
-        }
-        return StrategyPreset.TWO_STOP.makePlan();
+        StrategyPreset chosen = allowed.contains(wanted) ? wanted : allowed.get(0);
+        return chosen.makePlan(laps);
     }
 
     /**

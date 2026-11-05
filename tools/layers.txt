@@ -8,6 +8,7 @@
 sim Tuning.java
 sim TrackProfile.java
 sim TrackSample.java
+sim RacingLine.java
 sim Track.java
 sim CarPhysics.java
 sim SpeedProfile.java
@@ -37,6 +38,7 @@ sim PitPlan.java
 sim PitPhase.java
 sim PitLane.java
 sim StrategyPreset.java
+sim RaceLength.java
 sim RainEvent.java
 sim Forecast.java
 sim RaceEvent.java
@@ -83,6 +85,8 @@ ui LineChart.java
 ui BarChart.java
 ui ResultsScreen.java
 ui LabScreen.java
+ui WeatherOverlay.java
+ui TrackRaster.java
 
 lab StrategyVariant.java
 lab LabRun.java

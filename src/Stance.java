@@ -3,8 +3,11 @@
  */
 public enum Stance {
 
-    /** Brake later and carry more speed: more chance to pass, more risk and more wear. */
-    ATTACK("Attack"),
+    /** Lunge down the inside under braking: the best chance to pass, the most risk and wear. */
+    ATTACK("Inside"),
+
+    /** Go around the outside: less likely to stick, but much safer and hard to cover from the inside. */
+    OUTSIDE("Outside"),
 
     /** Tighter line, earlier braking: much harder to pass, but costs a little time either way. */
     DEFEND("Defend"),

@@ -38,6 +38,12 @@ public final class SetupScreen implements Screen {
     /** Preset buttons, in preset order. */
     private final List<UiButton> presetButtons = new ArrayList<UiButton>();
 
+    /** Race length buttons, in RaceLength order. */
+    private final List<UiButton> lengthButtons = new ArrayList<UiButton>();
+
+    /** The chosen race length. */
+    private RaceLength length = RaceLength.RACE;
+
     /** Stint buttons (as many as the preset has stints). */
     private final List<UiButton> stintButtons = new ArrayList<UiButton>();
 
@@ -76,6 +82,9 @@ public final class SetupScreen implements Screen {
 
     /** Two-compound rule check. */
     private final GLabel ruleLine;
+
+    /** Race length details line. */
+    private final GLabel lengthLine;
 
     /** Car count display. */
     private final GLabel carsLine;
@@ -122,10 +131,11 @@ public final class SetupScreen implements Screen {
         /**
          * Builds the pit plan for this choice.
          *
+         * @param laps race length in laps
          * @return a fresh plan
          */
-        PitPlan toPlan() {
-            PitPlan plan = preset.makePlan();
+        PitPlan toPlan(int laps) {
+            PitPlan plan = preset.makePlan(laps);
             for (int i = 0; i < stints.length; i++) {
                 plan.setStintCompound(i, stints[i]);
             }
@@ -143,7 +153,7 @@ public final class SetupScreen implements Screen {
         this.manager = manager;
         this.track = track;
         this.seed = Math.floorMod(System.nanoTime(), 1000000L);
-        this.choice = StrategyChoice.suggested(StrategyPreset.ONE_STOP_LATE);
+        this.choice = StrategyChoice.suggested(defaultPreset(length.getLaps()));
         GraphicsProgram p = manager.getProgram();
         double w = manager.getWidth();
         p.add(Palette.background(w, manager.getHeight()));
@@ -171,50 +181,61 @@ public final class SetupScreen implements Screen {
 
         double x = 640;
         p.add(Palette.panel(w - x - 40, 560), x, 92);
-        p.add(Palette.label("STRATEGY", Palette.HUD, Palette.TEXT_DIM), x + 16, 122);
+        p.add(Palette.label("RACE LENGTH  (1, 2, 3)", Palette.HUD, Palette.TEXT_DIM), x + 16, 118);
+        for (int i = 0; i < RaceLength.values().length; i++) {
+            RaceLength option = RaceLength.values()[i];
+            UiButton b = new UiButton(option.getDisplayName(), 180, 36);
+            p.add(b, x + 16 + i * 192, 128);
+            lengthButtons.add(b);
+            buttons.add(b, () -> chooseLength(option));
+        }
+        lengthLine = Palette.label("", Palette.SMALL, Palette.TEXT_DIM);
+        p.add(lengthLine, x + 16, 182);
+
+        p.add(Palette.label("STRATEGY", Palette.HUD, Palette.TEXT_DIM), x + 16, 210);
         for (int i = 0; i < StrategyPreset.values().length; i++) {
             StrategyPreset preset = StrategyPreset.values()[i];
-            UiButton b = new UiButton(preset.getDisplayName(), 180, 36);
-            p.add(b, x + 16 + i * 192, 136);
+            UiButton b = new UiButton(preset.getDisplayName(), 138, 36);
+            p.add(b, x + 16 + i * 144, 220);
             presetButtons.add(b);
             buttons.add(b, () -> choosePreset(preset));
         }
-        p.add(Palette.label("Tires per stint (click to change):", Palette.SMALL, Palette.TEXT), x + 16, 200);
+        p.add(Palette.label("Tires per stint (click to change):", Palette.SMALL, Palette.TEXT), x + 16, 276);
         for (int i = 0; i < 3; i++) {
             UiButton b = new UiButton("", 180, 36);
-            p.add(b, x + 16 + i * 192, 212);
+            p.add(b, x + 16 + i * 192, 286);
             stintButtons.add(b);
             int stint = i;
             buttons.add(b, () -> cycleStint(stint));
         }
         ruleLine = Palette.label("", Palette.SMALL, Palette.TEXT);
-        p.add(ruleLine, x + 16, 272);
+        p.add(ruleLine, x + 16, 342);
         undoButton = new UiButton("Undo  (U)", 140, 32);
-        p.add(undoButton, x + 16, 284);
+        p.add(undoButton, x + 16, 352);
         buttons.add(undoButton, () -> undo());
 
-        p.add(Palette.label("CARS", Palette.HUD, Palette.TEXT_DIM), x + 16, 356);
+        p.add(Palette.label("CARS", Palette.HUD, Palette.TEXT_DIM), x + 16, 410);
         UiButton fewer = new UiButton("-", 44, 36);
         UiButton more = new UiButton("+", 44, 36);
-        p.add(fewer, x + 16, 368);
-        p.add(more, x + 140, 368);
+        p.add(fewer, x + 16, 420);
+        p.add(more, x + 140, 420);
         carsLine = Palette.label("", Palette.HEADLINE, Palette.TEXT);
-        p.add(carsLine, x + 76, 396);
+        p.add(carsLine, x + 76, 448);
         buttons.add(fewer, () -> changeCars(-1));
         buttons.add(more, () -> changeCars(1));
 
-        p.add(Palette.label("BASELINE PUSH (also sets your default battle stance)", Palette.HUD, Palette.TEXT_DIM), x + 16, 446);
+        p.add(Palette.label("BASELINE PUSH (also sets your default battle stance)", Palette.HUD, Palette.TEXT_DIM), x + 16, 496);
         String[] keys = {"Q", "W", "E"};
         for (int i = 0; i < PushLevel.values().length; i++) {
             PushLevel level = PushLevel.values()[i];
             UiButton b = new UiButton(keys[i] + "  " + level.getDisplayName(), 180, 36);
-            p.add(b, x + 16 + i * 192, 460);
+            p.add(b, x + 16 + i * 192, 506);
             pushButtons.add(b);
             buttons.add(b, () -> choosePush(level));
         }
 
         UiButton start = new UiButton("START RACE  (Enter)", 300, 48);
-        p.add(start, x + 16, 584);
+        p.add(start, x + 16, 590);
         buttons.add(start, () -> startRace());
         rebuildRace();
     }
@@ -223,7 +244,7 @@ public final class SetupScreen implements Screen {
      * Makes a new race preview with the current seed and car count, which runs qualifying again.
      */
     private void rebuildRace() {
-        race = new Race(new RaceConfig(carCount, Tuning.RACE_LAPS, seed), track, manager.getRoster());
+        race = new Race(new RaceConfig(carCount, length.getLaps(), seed), track, manager.getRoster());
         drawForecast();
         refresh();
     }
@@ -238,7 +259,7 @@ public final class SetupScreen implements Screen {
             return;
         }
         Random weatherRandom = new Random(seed * 1000 + weatherRoll);
-        forecast = ForecastGenerator.generate(stats, track.getProfile(), Tuning.RACE_LAPS, weatherRandom);
+        forecast = ForecastGenerator.generate(stats, track.getProfile(), length.getLaps(), weatherRandom);
     }
 
     /**
@@ -269,11 +290,40 @@ public final class SetupScreen implements Screen {
     }
 
     /**
+     * Changes the race length. The strategy falls back to a preset that fits the new length, and the
+     * race preview (and its qualifying) is rebuilt.
+     *
+     * @param option the new length
+     */
+    private void chooseLength(RaceLength option) {
+        length = option;
+        if (!StrategyPreset.forRace(length.getLaps()).contains(choice.preset)) {
+            undo.clear();
+            choice = StrategyChoice.suggested(defaultPreset(length.getLaps()));
+        }
+        rebuildRace();
+    }
+
+    /**
+     * Returns the preset suggested for a race length: one-stop late when the two-compound rule
+     * applies, otherwise no stop.
+     *
+     * @param laps race length in laps
+     * @return the preset
+     */
+    private static StrategyPreset defaultPreset(int laps) {
+        return RaceLength.compoundRuleApplies(laps) ? StrategyPreset.ONE_STOP_LATE : StrategyPreset.NO_STOP;
+    }
+
+    /**
      * Switches to a preset's suggested strategy (undoable).
      *
      * @param preset the preset
      */
     private void choosePreset(StrategyPreset preset) {
+        if (!StrategyPreset.forRace(length.getLaps()).contains(preset)) {
+            return;
+        }
         undo.push(choice);
         choice = StrategyChoice.suggested(preset);
         refresh();
@@ -322,7 +372,7 @@ public final class SetupScreen implements Screen {
         if (forecast != null) {
             race.applyForecast(forecast);
         }
-        race.setPlayerPlan(choice.toPlan(), push);
+        race.setPlayerPlan(choice.toPlan(length.getLaps()), push);
         manager.startRace(race);
     }
 
@@ -350,21 +400,32 @@ public final class SetupScreen implements Screen {
                     e.getDriver().getTeam().getName(), lapText(e.getLapTime())) + (mine ? "   <- you" : ""));
             gridRows[i].setColor(mine ? Palette.PLAYER : Palette.TEXT);
         }
-        for (int i = 0; i < presetButtons.size(); i++) {
-            presetButtons.get(i).setHighlighted(StrategyPreset.values()[i] == choice.preset);
+        for (int i = 0; i < lengthButtons.size(); i++) {
+            lengthButtons.get(i).setHighlighted(RaceLength.values()[i] == length);
         }
-        PitPlan plan = choice.toPlan();
+        lengthLine.setLabel(length.getLaps() + (length.getLaps() == 1 ? " lap" : " laps") + ", " + length.getDuration()
+                + " at 4x.  Tires last " + Math.round(RaceLength.tireLifeScale(length.getLaps()) * 100)
+                + "% as long as in a 10-lap race.");
+        List<StrategyPreset> allowed = StrategyPreset.forRace(length.getLaps());
+        for (int i = 0; i < presetButtons.size(); i++) {
+            StrategyPreset preset = StrategyPreset.values()[i];
+            presetButtons.get(i).setEnabled(allowed.contains(preset));
+            presetButtons.get(i).setHighlighted(preset == choice.preset);
+        }
+        PitPlan plan = choice.toPlan(length.getLaps());
         for (int i = 0; i < stintButtons.size(); i++) {
             UiButton b = stintButtons.get(i);
             b.setVisible(i < choice.stints.length);
             if (i < choice.stints.length) {
                 int first = i == 0 ? 1 : plan.getStops().get(i - 1).getLap() + 1;
-                int last = i < plan.getStops().size() ? plan.getStops().get(i).getLap() : Tuning.RACE_LAPS;
+                int last = i < plan.getStops().size() ? plan.getStops().get(i).getLap() : length.getLaps();
                 b.setLabel(String.format(Locale.ROOT, "L%d-%d  %s", first, last, choice.stints[i].getDisplayName()));
             }
         }
-        boolean legal = plan.usesTwoDryCompounds();
-        ruleLine.setLabel(legal ? "Two-compound rule: OK (two different dry compounds)"
+        boolean ruleOn = RaceLength.compoundRuleApplies(length.getLaps());
+        boolean legal = !ruleOn || plan.usesTwoDryCompounds();
+        ruleLine.setLabel(!ruleOn ? "Two-compound rule: off in races under " + Tuning.COMPOUND_RULE_MIN_LAPS + " laps"
+                : legal ? "Two-compound rule: OK (two different dry compounds)"
                 : "Two-compound rule: BROKEN, you would be disqualified in a dry race");
         ruleLine.setColor(legal ? Palette.GOOD : Palette.DANGER);
         undoButton.setEnabled(!undo.isEmpty());
@@ -435,6 +496,11 @@ public final class SetupScreen implements Screen {
                 break;
             case KeyEvent.VK_V:
                 rerollWeather();
+                break;
+            case KeyEvent.VK_1:
+            case KeyEvent.VK_2:
+            case KeyEvent.VK_3:
+                chooseLength(RaceLength.values()[keyCode - KeyEvent.VK_1]);
                 break;
             case KeyEvent.VK_Q:
                 choosePush(PushLevel.CONSERVE);

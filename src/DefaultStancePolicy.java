@@ -34,7 +34,10 @@ public final class DefaultStancePolicy {
                 + (gapSeconds < Tuning.DEFAULT_ATTACK_GAP ? Tuning.AI_CLOSE_ATTACK_BONUS : 0)
                 + tireEdge * Tuning.AI_TIRE_EDGE_WEIGHT
                 - (tiresOk ? 0 : Tuning.AI_WORN_TIRE_CAUTION);
-        return random.nextDouble() < chance ? Stance.ATTACK : Stance.HOLD;
+        if (random.nextDouble() >= chance) {
+            return Stance.HOLD;
+        }
+        return random.nextDouble() < Tuning.AI_OUTSIDE_CHANCE ? Stance.OUTSIDE : Stance.ATTACK;
     }
 
     /**
@@ -79,8 +82,9 @@ public final class DefaultStancePolicy {
         if (defender.isPlayer()) {
             return playerDefault(defender, gapSeconds, false);
         }
-        boolean readsAttack = attackerIntent == Stance.ATTACK && random.nextDouble() < Tuning.AI_READ_ACCURACY;
-        boolean guesses = attackerIntent != Stance.ATTACK && random.nextDouble() < Tuning.AI_FALSE_DEFEND;
+        boolean coming = attackerIntent == Stance.ATTACK || attackerIntent == Stance.OUTSIDE;
+        boolean readsAttack = coming && random.nextDouble() < Tuning.AI_READ_ACCURACY;
+        boolean guesses = !coming && random.nextDouble() < Tuning.AI_FALSE_DEFEND;
         return readsAttack || guesses ? Stance.DEFEND : Stance.HOLD;
     }
 }

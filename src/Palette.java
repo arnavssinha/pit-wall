@@ -91,6 +91,12 @@ public final class Palette {
     /** Purple, used for a fastest sector. */
     public static final Color PURPLE = new Color(190, 110, 255);
 
+    /** Fill of the ERS exhaust flame (see-through blue). */
+    public static final Color ERS_GLOW = new Color(90, 190, 255, 150);
+
+    /** Rain streaks. */
+    public static final Color RAIN = new Color(190, 215, 255, 170);
+
     /** Large headline font. */
     public static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 26);
 

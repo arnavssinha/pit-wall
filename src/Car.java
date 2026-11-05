@@ -29,11 +29,17 @@ public final class Car {
     /** True for the car the player engineers. */
     private final boolean player;
 
+    /** Current form: a small, slowly wandering pace change on top of the race pace (0 is neutral). */
+    private double form;
+
     /** The brakes. */
     private final Brakes brakes = new Brakes();
 
     /** The energy recovery system. */
     private final Ers ers = new Ers();
+
+    /** How much longer (or shorter) tires last in this race than in the reference race length. */
+    private double tireLifeScale = 1.0;
 
     /** The tires currently fitted. */
     private Tire tire;
@@ -59,11 +65,20 @@ public final class Car {
     /** Grip available this step from tires and brakes, used when braking. */
     private double currentGrip = 1.0;
 
-    /** Sideways offset from the centerline in meters, positive to the left. */
+    /** Sideways position from the centerline in meters, positive to the left. */
     private double lateralOffset;
 
-    /** Sideways offset the car is moving toward, in meters. */
+    /** Sideways position the car is moving toward when it is not following the racing line, in meters. */
     private double lateralTarget;
+
+    /** True if the car is heading for (or riding) the racing line rather than a target of its own. */
+    private boolean followLine = true;
+
+    /** True once the car has reached the racing line and simply rides it. */
+    private boolean onLine;
+
+    /** Sideways movement per meter driven in the last step, used to angle the car's drawing. */
+    private double lateralRate;
 
     /**
      * How willing a computer driver is to attack, drawn from a narrow random band each race.
@@ -85,6 +100,12 @@ public final class Car {
 
     /** True if this car is the one doing the passing. */
     private boolean passAttacker;
+
+    /** True once the battle went the attacker's way and the pass is being completed. */
+    private boolean passGranted;
+
+    /** True if the attack failed and the attacker is dropping back behind the partner. */
+    private boolean passAborting;
 
     /** Seconds of time still to be lost from an incident or a defensive line. */
     private double timePenalty;
@@ -179,7 +200,7 @@ public final class Car {
      */
     public double targetSpeed(ProfileSet profiles, TrackConditions conditions) {
         currentGrip = tire.grip(conditions.wetnessAt(distance)) * brakes.fadeFactor();
-        double scale = paceFactor * pushLevel.getPace() * ers.boost();
+        double scale = paceFactor * (1 + form) * pushLevel.getPace() * ers.boost();
         currentTopSpeed = Tuning.TOP_SPEED * scale;
         if (retired) {
             return 0;
@@ -189,6 +210,26 @@ public final class Car {
             target *= Tuning.PENALTY_SPEED_FRACTION;
         }
         return finished ? target * Tuning.COOL_DOWN_PACE : target;
+    }
+
+    /**
+     * Lets the car's form wander a little: a random nudge, a pull back toward neutral, and a limit.
+     * This makes rivals quicker or slower for a while, as real drivers are.
+     *
+     * @param nudge random change this second
+     */
+    public void updateForm(double nudge) {
+        form += nudge - form * Tuning.FORM_PULL_BACK;
+        form = Math.max(-Tuning.FORM_RANGE, Math.min(Tuning.FORM_RANGE, form));
+    }
+
+    /**
+     * Returns the current form.
+     *
+     * @return pace change, around 0
+     */
+    public double getForm() {
+        return form;
     }
 
     /**
@@ -221,8 +262,7 @@ public final class Car {
     }
 
     /**
-     * Moves the car forward along the track and sideways toward its lateral target, and counts
-     * down any time penalty. Driving at a fraction f of normal speed loses (1 / f - 1) seconds
+     * Moves the car forward along the track and counts down any time penalty. Driving at a fraction f of normal speed loses (1 / f - 1) seconds
      * for every second driven, which is how the penalty is used up.
      *
      * @param meters distance to move, never negative
@@ -230,16 +270,74 @@ public final class Car {
      */
     public void advance(double meters, double dt) {
         distance += meters;
-        double step = lateralSpeed * dt;
-        double toGo = lateralTarget - lateralOffset;
-        if (Math.abs(toGo) <= step) {
-            lateralOffset = lateralTarget;
-        } else {
-            lateralOffset += Math.signum(toGo) * step;
-        }
         if (timePenalty > 0) {
             timePenalty -= dt * (1.0 / Tuning.PENALTY_SPEED_FRACTION - 1.0);
         }
+    }
+
+    /**
+     * Moves the car sideways for one step. A car on the racing line simply rides it; a car heading
+     * back to the line, or toward a target of its own (passing, covering, pit lane), moves toward it
+     * at its sideways speed.
+     *
+     * @param line the racing line's position here, in meters from the centerline
+     * @param meters distance driven this step
+     * @param dt step length in seconds
+     */
+    public void steer(double line, double meters, double dt) {
+        double before = lateralOffset;
+        if (followLine && onLine) {
+            lateralOffset = line;
+        } else {
+            double target = followLine ? line : lateralTarget;
+            double step = lateralSpeed * dt;
+            double toGo = target - lateralOffset;
+            lateralOffset = Math.abs(toGo) <= step ? target : lateralOffset + Math.signum(toGo) * step;
+            if (followLine && Math.abs(lateralOffset - line) < Tuning.LINE_LOCK_TOLERANCE) {
+                onLine = true;
+            }
+        }
+        lateralRate = meters > 1e-6 ? (lateralOffset - before) / meters : 0;
+    }
+
+    /**
+     * Pushes the car sideways to a position (to keep room from a car alongside). A car on the racing
+     * line drifts back to it afterwards.
+     *
+     * @param lateral the new sideways position in meters
+     */
+    public void nudgeLateral(double lateral) {
+        lateralOffset = lateral;
+        onLine = false;
+    }
+
+    /**
+     * Sends the car back to the racing line.
+     *
+     * @param speed sideways speed in meters per second
+     */
+    public void returnToLine(double speed) {
+        followLine = true;
+        onLine = false;
+        lateralSpeed = speed;
+    }
+
+    /**
+     * Returns whether the car is riding the racing line.
+     *
+     * @return true once it has settled on the line
+     */
+    public boolean isOnLine() {
+        return followLine && onLine;
+    }
+
+    /**
+     * Returns the sideways movement per meter driven in the last step.
+     *
+     * @return meters sideways per meter forward
+     */
+    public double getLateralRate() {
+        return lateralRate;
     }
 
     /**
@@ -252,7 +350,56 @@ public final class Car {
     public void beginPass(Car partner, boolean attacking, double lateral) {
         passPartner = partner;
         passAttacker = attacking;
+        passGranted = false;
+        passAborting = false;
         setLateralTarget(lateral, Tuning.LATERAL_SPEED);
+    }
+
+    /**
+     * Pairs this car with an attacker without moving it (a defender that holds its line), so the
+     * two may run side by side.
+     *
+     * @param attacker the car attacking this one
+     */
+    public void pairWith(Car attacker) {
+        passPartner = attacker;
+        passAttacker = false;
+        passGranted = false;
+        passAborting = false;
+    }
+
+    /**
+     * Lets the attacker complete the pass: it gets a little extra speed until it is clear ahead.
+     */
+    public void grantPass() {
+        passGranted = true;
+        passAborting = false;
+    }
+
+    /**
+     * Makes the attacker give up: it backs off until it is safely behind its partner again.
+     */
+    public void abortPass() {
+        passGranted = false;
+        passAborting = true;
+    }
+
+    /**
+     * Returns whether this attacker has been granted the pass.
+     *
+     * @return true while completing a successful pass
+     */
+    public boolean isPassGranted() {
+        return passGranted;
+    }
+
+    /**
+     * Returns whether this attacker is backing off after a failed attack.
+     *
+     * @return true while dropping back
+     */
+    public boolean isPassAborting() {
+        return passAborting;
     }
 
     /**
@@ -262,6 +409,8 @@ public final class Car {
      * @param speed sideways speed in meters per second
      */
     public void setLateralTarget(double target, double speed) {
+        followLine = false;
+        onLine = false;
         lateralTarget = target;
         lateralSpeed = speed;
     }
@@ -276,12 +425,17 @@ public final class Car {
     }
 
     /**
-     * Ends a pass and heads back to the racing line.
+     * Ends a pass and heads back to the racing line (unless the car is in the pit lane or retired,
+     * which keep their own sideways position).
      */
     public void endPass() {
         passPartner = null;
         passAttacker = false;
-        setLateralTarget(0, Tuning.LATERAL_SPEED);
+        passGranted = false;
+        passAborting = false;
+        if (!isOffTrack()) {
+            returnToLine(Tuning.LATERAL_SPEED);
+        }
     }
 
     /**
@@ -610,7 +764,7 @@ public final class Car {
         double curvature = track.getSample(track.indexAt(distance)).getCurvature();
         double lateral = speed * speed * Math.abs(curvature);
         double load = CarPhysics.load(lateral, deceleration);
-        tire.update(dt, meters, load, profiles.getMeanLoad(), track.getLapLength(), pushLevel,
+        tire.update(dt, meters, load, profiles.getMeanLoad(), track.getLapLength() * tireLifeScale, pushLevel,
                 track.getProfile().getTrackWearMultiplier(), conditions.tireAmbient(),
                 conditions.wetnessAt(distance));
         brakes.update(dt, speed, deceleration, pushLevel.getHeat(), conditions.getAirTemp());
@@ -650,6 +804,15 @@ public final class Car {
      */
     public void capSpeed(double limit) {
         speed = Math.min(speed, Math.max(0, limit));
+    }
+
+    /**
+     * Sets how much longer or shorter tires last in this race (see RaceLength.tireLifeScale).
+     *
+     * @param scale tire life multiplier
+     */
+    public void setTireLifeScale(double scale) {
+        tireLifeScale = scale;
     }
 
     /**

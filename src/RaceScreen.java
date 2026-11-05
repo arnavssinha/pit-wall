@@ -28,6 +28,12 @@ public final class RaceScreen implements Screen {
     /** The camera that moves the world. */
     private final Camera camera;
 
+    /** Rain tint and streaks over the track. */
+    private final WeatherOverlay weather;
+
+    /** Real seconds since the previous frame, for the rain animation. */
+    private double lastFrameSeconds;
+
     /** Timing tower on the left. */
     private final TimingTower tower;
 
@@ -107,6 +113,9 @@ public final class RaceScreen implements Screen {
         double viewBottom = height - HudPanel.BOTTOM_PANEL_HEIGHT;
         camera = new Camera(world, drawing, viewLeft, viewTop, width - viewLeft, viewBottom - viewTop);
 
+        weather = new WeatherOverlay(width, height);
+        program.add(weather);
+
         tower = new TimingTower(race);
         tower.setLocation(8, 8);
         program.add(tower);
@@ -155,6 +164,7 @@ public final class RaceScreen implements Screen {
         for (int i = 0; i < steps; i++) {
             race.step();
         }
+        lastFrameSeconds = realSeconds;
         render();
         debug.record(realSeconds, steps, program.getGCanvas());
     }
@@ -290,15 +300,16 @@ public final class RaceScreen implements Screen {
      * Redraws everything from the current race state.
      */
     private void render() {
-        camera.update(followed);
+        Battle battle = race.getBattles().getPlayerBattle();
+        camera.update(followed, battle != null && !battle.isResolved());
         world.updateCars(warnedRival());
         updatePrompt();
         radio.update(race.getMessages());
+        weather.update(race.getConditions(), lastFrameSeconds);
         tower.update();
         miniMap.update();
         hud.update(followed, Tuning.TIME_SPEEDS[speedIndex], paused);
         gauges.update(followed, race);
-        world.updateWetness(race.getConditions());
         hud.refreshBanner();
     }
 
@@ -374,6 +385,9 @@ public final class RaceScreen implements Screen {
                 break;
             case KeyEvent.VK_A:
                 race.getBattles().choosePlayerStance(Stance.ATTACK);
+                break;
+            case KeyEvent.VK_O:
+                race.getBattles().choosePlayerStance(Stance.OUTSIDE);
                 break;
             case KeyEvent.VK_S:
                 race.getBattles().choosePlayerStance(Stance.DEFEND);

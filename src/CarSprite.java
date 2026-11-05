@@ -35,6 +35,9 @@ public final class CarSprite {
     /** Yellow ring around the player's car, or null for other cars. */
     private final GOval ring;
 
+    /** Blue exhaust flame shown behind the car while it deploys ERS. */
+    private final GPolygon glow;
+
     /** Red warning triangle shown above a rival that is about to attack the player. */
     private final GPolygon alert;
 
@@ -95,6 +98,12 @@ public final class CarSprite {
         } else {
             ring = null;
         }
+        glow = new GPolygon();
+        glow.addVertex(-0.85 * l, -0.5 * w);
+        glow.addVertex(-2.4 * l, 0);
+        glow.addVertex(-0.85 * l, 0.5 * w);
+        style(glow, Palette.ERS_GLOW, Palette.ERS);
+        glow.setVisible(false);
         alert = new GPolygon();
         double s = TrackDrawing.CAR_WIDTH;
         alert.addVertex(0, -s);
@@ -104,6 +113,15 @@ public final class CarSprite {
         alert.setVisible(false);
         appliedDegrees = 0;
         appliedEnlargement = 1;
+    }
+
+    /**
+     * Returns the ERS exhaust flame, so the world view can add it under the car.
+     *
+     * @return the flame polygon
+     */
+    public GPolygon getGlow() {
+        return glow;
     }
 
     /**
@@ -202,10 +220,24 @@ public final class CarSprite {
 
         double enlargement = Math.max(1.0, MIN_SCREEN_LENGTH / (TrackDrawing.CAR_LENGTH * zoom));
         boolean rescale = Math.abs(enlargement / appliedEnlargement - 1) > 0.02;
-        double heading = drawing.getTrack().headingAt(d);
+        double probe = Tuning.HEADING_PROBE_METERS;
+        double aheadLateral = lateral + car.getLateralRate() * probe;
+        double heading = Math.atan2(drawing.y(d + probe, aheadLateral) - drawing.y(d, lateral),
+                drawing.x(d + probe, aheadLateral) - drawing.x(d, lateral));
         double turn = Math.toDegrees(Track.angleDifference(heading, Math.toRadians(appliedDegrees)));
         boolean rotate = Math.abs(turn) > 0.05;
 
+        boolean boosting = car.getErs().isDeploying();
+        if (glow.isVisible() != boosting) {
+            glow.setVisible(boosting);
+        }
+        glow.setLocation(px, py);
+        if (rescale) {
+            glow.scale(enlargement / appliedEnlargement);
+        }
+        if (rotate) {
+            glow.rotate(turn);
+        }
         for (GPolygon part : parts) {
             part.setLocation(px, py);
             if (rescale) {

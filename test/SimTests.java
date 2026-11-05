@@ -71,6 +71,7 @@ public final class SimTests {
         check("retirement: car stops, classified DNF, race ends", () -> testRetirement());
         check("event queue hands out the earliest event first", () -> testEventQueue());
         check("race report: sectors add up, charts have data", () -> testRaceReport());
+        check("shootout and sprint: right laps, no stops, no DSQ", () -> testShortRaces());
         check("strategy lab: same grid per scenario, CSV written", () -> testLabSmall());
         check("strategy lab: 200 races within the time target", () -> testLabSpeed());
     }
@@ -585,12 +586,12 @@ public final class SimTests {
         System.out.printf("      pass chance: easy track vs Hold %.2f, vs Defend %.2f; hard track vs Defend %.2f%n",
                 easyHold, easyDefend, hardDefend);
         require(easyHold > 0.5 && easyHold < 0.95, "easy track vs Hold out of band");
-        require(easyDefend > 0.15 && easyDefend < easyHold, "easy track vs Defend out of band");
+        require(easyDefend > 0.08 && easyDefend < easyHold, "easy track vs Defend out of band");
         require(hardDefend < 0.1, "hard track vs Defend should be very low");
     }
 
     /**
-     * Pass probability for an attack at 0.5 s with no ERS and equal grip.
+     * Pass probability for an attack from nose to tail (overlap 0) with no ERS and equal grip.
      *
      * @param a attacker
      * @param d defender
@@ -603,12 +604,12 @@ public final class SimTests {
         Battle b = new Battle(a, d, corner, 0, 0.5, 0, false);
         b.setAttackerStance(Stance.ATTACK);
         b.setDefenderStance(defence);
-        return BattleResolver.passProbability(BattleResolver.passScore(b, 1.0, 1.0, false, false, trackDifficulty));
+        return BattleResolver.passProbability(BattleResolver.passScore(b, 1.0, 1.0, false, false, trackDifficulty, 0.0));
     }
 
     /**
-     * Runs three AI-only Monza races and checks the share of attacks that become passes, and that
-     * passes do happen but not on every corner.
+     * Runs three AI-only Monza races and checks the share of attacks that become passes (passes are
+     * never guaranteed, but they do happen), and the number of passes per race.
      */
     private void testRacePassRate() {
         int attempts = 0;
@@ -622,8 +623,8 @@ public final class SimTests {
         double rate = passes / (double) Math.max(1, attempts);
         System.out.printf("      3 races: %d attacks, %d passes (%.0f%% success, %.0f passes per race)%n",
                 attempts, passes, rate * 100, passes / 3.0);
-        require(rate > 0.25 && rate < 0.65, "pass success rate " + rate + " out of band");
-        require(passes / 3.0 >= 10 && passes / 3.0 <= 70, "passes per race out of band");
+        require(rate > 0.15 && rate < 0.5, "pass success rate " + rate + " out of band");
+        require(passes / 3.0 >= 8 && passes / 3.0 <= 70, "passes per race out of band");
     }
 
     /**
@@ -632,7 +633,7 @@ public final class SimTests {
      */
     private void testPitStop() {
         Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 21L), monza(), roster());
-        race.setPlayerPlan(StrategyPreset.ONE_STOP_LATE.makePlan(), PushLevel.BALANCED);
+        race.setPlayerPlan(StrategyPreset.ONE_STOP_LATE.makePlan(Tuning.RACE_LAPS), PushLevel.BALANCED);
         Car player = race.getPlayerCar();
         int stopLap = 0;
         while (!race.isOver()) {
@@ -670,12 +671,16 @@ public final class SimTests {
     }
 
     /**
-     * Checks each strategy preset uses two different dry compounds.
+     * Checks every preset offered for a full race uses two different dry compounds, and short races
+     * offer the right choices.
      */
     private void testPresetsLegal() {
-        for (StrategyPreset preset : StrategyPreset.values()) {
-            require(preset.makePlan().usesTwoDryCompounds(), preset + " breaks the two-compound rule");
+        for (StrategyPreset preset : StrategyPreset.forRace(Tuning.RACE_LAPS)) {
+            require(preset.makePlan(Tuning.RACE_LAPS).usesTwoDryCompounds(), preset + " breaks the two-compound rule");
         }
+        require(!StrategyPreset.forRace(Tuning.RACE_LAPS).contains(StrategyPreset.NO_STOP), "no-stop offered in a long race");
+        require(StrategyPreset.forRace(1).size() == 1 && StrategyPreset.forRace(1).get(0) == StrategyPreset.NO_STOP,
+                "a shootout should only offer no stop");
         require(!new PitPlan(Compound.MEDIUM).usesTwoDryCompounds(), "a no-stop plan should fail the rule");
     }
 
@@ -880,7 +885,7 @@ public final class SimTests {
         } catch (IOException e) {
             throw new AssertionError(e.getMessage(), e);
         }
-        StrategyLab lab = new StrategyLab(monza(), roster(), weather, 22);
+        StrategyLab lab = new StrategyLab(monza(), roster(), weather, 22, Tuning.RACE_LAPS);
         LabResult result = lab.run(14, 1000L);
         require(result.getRuns().size() == 14, "expected 14 races, got " + result.getRuns().size());
         for (LabRun a : result.getRuns()) {
@@ -914,11 +919,30 @@ public final class SimTests {
         } catch (IOException e) {
             throw new AssertionError(e.getMessage(), e);
         }
-        StrategyLab lab = new StrategyLab(monza(), roster(), weather, 22);
+        StrategyLab lab = new StrategyLab(monza(), roster(), weather, 22, Tuning.RACE_LAPS);
         LabResult result = lab.run(Tuning.LAB_DEFAULT_RACES, 2000L);
         System.out.printf("      %d races in %.1f s on %d cores (target %.0f s); best: %s, window: %s%n",
                 result.getRuns().size(), result.getSeconds(), Runtime.getRuntime().availableProcessors(),
                 Tuning.LAB_TARGET_SECONDS, result.bestPreset().getName(), result.bestWindow().getName());
         require(result.getSeconds() < Tuning.LAB_TARGET_SECONDS, "lab took " + result.getSeconds() + " s");
+    }
+
+    /**
+     * Runs a 1-lap shootout and a 3-lap sprint and checks every finisher drove the right number of laps,
+     * nobody stopped in the shootout, and nobody was disqualified (the two-compound rule is off).
+     */
+    private void testShortRaces() {
+        for (RaceLength length : new RaceLength[] {RaceLength.SHOOTOUT, RaceLength.SPRINT}) {
+            Race race = new Race(new RaceConfig(22, length.getLaps(), 71L), monza(), roster());
+            runToEnd(race);
+            Car winner = race.getClassification().get(0);
+            require(winner.getLapsCompleted() == length.getLaps(), length + ": winner drove " + winner.getLapsCompleted());
+            for (Car car : race.getCars()) {
+                require(!car.isDisqualified(), length + ": nobody should be disqualified");
+                if (length == RaceLength.SHOOTOUT) {
+                    require(car.getStopsMade() == 0, "nobody should stop in a shootout");
+                }
+            }
+        }
     }
 }

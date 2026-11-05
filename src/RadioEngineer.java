@@ -57,7 +57,8 @@ public final class RadioEngineer {
             send("brakes", "Brakes are overheating. Lift and coast.");
         }
         if (car.isErsWanted() && car.getErs().getCharge() <= 0.01) {
-            send("ers", "Battery is flat. Switch deploy off to recharge.");
+            car.setErsWanted(false);
+            race.addMessage("Battery flat: deploy switched off to recharge. X to deploy again.", true);
         }
         checkRival(car);
         checkWeather(car);

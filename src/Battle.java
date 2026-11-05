@@ -36,6 +36,15 @@ public final class Battle {
     /** True once the player's stance can no longer change. */
     private boolean playerLocked;
 
+    /** True once the attacker has pulled out to make its move (or been paired, for a Hold). */
+    private boolean attackerEngaged;
+
+    /** True once the attacker has actually moved out of the slipstream to the side. */
+    private boolean pulledOut;
+
+    /** True once the defender has reacted (covered the inside, or stayed on its line). */
+    private boolean defenderEngaged;
+
     /** How it ended, or null while open. */
     private BattleOutcome outcome;
 
@@ -115,6 +124,54 @@ public final class Battle {
         outcome = result;
         message = text;
         playerLocked = true;
+    }
+
+    /**
+     * Records that the attacker has made its move.
+     */
+    public void markAttackerEngaged() {
+        attackerEngaged = true;
+    }
+
+    /**
+     * Returns whether the attacker has made its move.
+     *
+     * @return true once engaged
+     */
+    public boolean isAttackerEngaged() {
+        return attackerEngaged;
+    }
+
+    /**
+     * Records that the attacker has pulled out of the slipstream.
+     */
+    public void markPulledOut() {
+        pulledOut = true;
+    }
+
+    /**
+     * Returns whether the attacker has pulled out of the slipstream.
+     *
+     * @return true once pulled out
+     */
+    public boolean isPulledOut() {
+        return pulledOut;
+    }
+
+    /**
+     * Records that the defender has reacted.
+     */
+    public void markDefenderEngaged() {
+        defenderEngaged = true;
+    }
+
+    /**
+     * Returns whether the defender has reacted.
+     *
+     * @return true once engaged
+     */
+    public boolean isDefenderEngaged() {
+        return defenderEngaged;
     }
 
     /**

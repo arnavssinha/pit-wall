@@ -24,8 +24,8 @@ public final class Tuning {
     /** Playback speeds the player can choose. Physics is unchanged; more steps run per frame. */
     public static final int[] TIME_SPEEDS = {1, 2, 4, 8};
 
-    /** Index into TIME_SPEEDS used at race start (2x, chosen by the project owner). */
-    public static final int DEFAULT_TIME_SPEED_INDEX = 1;
+    /** Index into TIME_SPEEDS used at race start (4x, for a faster, more engaging pace). */
+    public static final int DEFAULT_TIME_SPEED_INDEX = 2;
 
     /** Gravity in meters per second squared (physics). */
     public static final double GRAVITY = 9.81;
@@ -86,7 +86,7 @@ public final class Tuning {
      * A following car will not close to less than this time gap until overtaking exists (M4).
      * Balance choice.
      */
-    public static final double FOLLOW_TIME_GAP = 0.30;
+    public static final double FOLLOW_TIME_GAP = 0.10;
 
     /**
      * Distance between grid slots in meters. Balance choice: real staggered grids put a car every
@@ -132,16 +132,16 @@ public final class Tuning {
     public static final double SLIPSTREAM_GAP_SECONDS = 1.0;
 
     /** Largest slipstream speed bonus, right behind the car ahead. Balance choice. */
-    public static final double SLIPSTREAM_MAX_BONUS = 0.025;
+    public static final double SLIPSTREAM_MAX_BONUS = 0.05;
 
     /** A battle opens when the car ahead is within this time gap (brief: about 1.0 s). */
     public static final double BATTLE_GAP_SECONDS = 1.0;
 
     /** A battle opens this many seconds (at current speed) before the corner's braking point. */
-    public static final double BATTLE_OPEN_LEAD_SECONDS = 1.6;
+    public static final double BATTLE_OPEN_LEAD_SECONDS = 4.0;
 
-    /** Simulation speed while the player decides (brief: about 0.25x). */
-    public static final double BATTLE_SLOWDOWN = 0.25;
+    /** Simulation speed while the player decides (slow enough to read, quick enough to keep the flow). */
+    public static final double BATTLE_SLOWDOWN = 0.35;
 
     /** Real seconds the player has to choose a stance (brief: about 4). */
     public static final double BATTLE_DECISION_SECONDS = 4.0;
@@ -165,7 +165,7 @@ public final class Tuning {
     public static final double CORNER_EASY_SPEED_DROP = 60.0;
 
     /** Constant term of the pass score. Balance choice. */
-    public static final double PASS_BASE_SCORE = -0.3;
+    public static final double PASS_BASE_SCORE = 0.0;
 
     /** Pass score per unit of speed-scale advantage (0.01 = 1 percent faster gives 0.4). Balance choice. */
     public static final double PASS_PACE_WEIGHT = 40.0;
@@ -404,11 +404,11 @@ public final class Tuning {
     /** Chance of a mechanical retirement per car per race. Balance choice. */
     public static final double RETIREMENT_CHANCE = 0.01;
 
-    /** Earliest lap for a scheduled incident. */
-    public static final int INCIDENT_FIRST_LAP = 2;
+    /** Earliest point for a scheduled incident, as a fraction of the race. */
+    public static final double INCIDENT_FIRST_FRACTION = 0.15;
 
-    /** Latest lap for a scheduled incident. */
-    public static final int INCIDENT_LAST_LAP = 8;
+    /** Latest point for a scheduled incident, as a fraction of the race. */
+    public static final double INCIDENT_LAST_FRACTION = 0.8;
 
     /** Seconds after a car stops before the safety car is out. */
     public static final double SC_DEPLOY_DELAY = 3.0;
@@ -461,6 +461,87 @@ public final class Tuning {
     /** When the player skips to the results, the rest of the race is run this far ahead at most, in race seconds. */
     public static final double SKIP_TO_RESULTS_SECONDS = 600.0;
 
+    /** Closest the racing line comes to the track edge, in meters (half a car plus a little). */
+    public static final double RACING_LINE_EDGE_MARGIN = 1.2;
+
+    /** Smoothing passes used to find the racing line. More passes give longer, rounder sweeps. */
+    public static final int RACING_LINE_PASSES = 3000;
+
+    /** A car within this sideways distance of the racing line locks onto it, in meters. */
+    public static final double LINE_LOCK_TOLERANCE = 0.15;
+
+    /** Seconds to wait before retrying an incident whose car was busy. */
+    public static final double INCIDENT_RETRY_SECONDS = 2.0;
+
+    /** How far ahead, in meters, the car drawing looks to work out which way it points. */
+    public static final double HEADING_PROBE_METERS = 3.0;
+
+    /** Speed fraction a failed attacker gives up while dropping back behind the defender. */
+    public static final double ABORT_SLOWDOWN = 0.12;
+
+    /** How far an attacker pulls out of the slipstream, in meters from the centerline. */
+    public static final double PULL_OUT_LATERAL = 3.4;
+
+    /** How far a covering defender moves toward the inside, in meters from the centerline. */
+    public static final double COVER_LATERAL = 2.6;
+
+    /** Sideways speed of a defender moving across to cover, in m/s. */
+    public static final double COVER_SPEED = 3.0;
+
+    /** Pass score added per unit of overlap (from -1, a gap behind, to +1, a gap ahead). Balance choice. */
+    public static final double PASS_OVERLAP_WEIGHT = 1.5;
+
+    /** Pass score bonus for going around the outside (smaller than Attack's). Balance choice. */
+    public static final double PASS_OUTSIDE_BONUS = 0.5;
+
+    /** Share of the corner difficulty an outside move still suffers. */
+    public static final double OUTSIDE_CORNER_SHARE = 0.5;
+
+    /** Share of the defender's cover bonus that still applies against an outside move. */
+    public static final double OUTSIDE_DEFEND_SHARE = 0.35;
+
+    /** Share of the normal attack risk taken by an outside move. */
+    public static final double OUTSIDE_RISK_SHARE = 0.4;
+
+    /** Chance a computer attacker goes around the outside instead of the inside. */
+    public static final double AI_OUTSIDE_CHANCE = 0.25;
+
+    /** Computer drivers fighting wheel to wheel deploy ERS while above this charge. */
+    public static final double AI_FIGHT_ERS_ABOVE = 0.1;
+
+    /** An attacker pulls out of the slipstream once this close behind, in seconds. */
+    public static final double PULL_OUT_GAP_SECONDS = 0.4;
+
+    /** An attacker pulls out at the latest this long before the braking point, in seconds. */
+    public static final double PULL_OUT_BEFORE_BRAKING_SECONDS = 1.2;
+
+    /** Extra ERS speed boost in overtake mode (2026 rule for a car within a second). Balance choice. */
+    public static final double OVERTAKE_MODE_BOOST = 0.04;
+
+    /** Largest swing of a car's form (its pace from moment to moment) above or below its race pace. */
+    public static final double FORM_RANGE = 0.008;
+
+    /** Random change in form per second (standard deviation). Balance choice. */
+    public static final double FORM_STEP = 0.0015;
+
+    /** Share of the form that fades back toward zero each second, so form wanders but does not drift away. */
+    public static final double FORM_PULL_BACK = 0.1;
+
+    /** Camera zoom multiplier while the player is in a battle. */
+    public static final double BATTLE_ZOOM = 1.35;
+
+    /** Cars either side in road order checked when keeping side-by-side room. */
+    public static final int SIDE_BY_SIDE_NEIGHBOURS = 3;
+
+    /** Shortest tire life, as a share of the reference race's, however short the race. */
+    public static final double MIN_TIRE_LIFE_SCALE = 0.3;
+
+    /** Races shorter than this many laps do not have the two-compound rule. */
+    public static final int COMPOUND_RULE_MIN_LAPS = 5;
+
+    /** Share of computer drivers that do not stop in a short race. Balance choice. */
+    public static final double AI_SHARE_NO_STOP = 0.8;
+
     /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
     public static final double PROFILE_GRIP_STEP = 0.004;
 
@@ -486,7 +567,7 @@ public final class Tuning {
     public static final double TIRE_HEAT_RISE = 63.0;
 
     /** Time in seconds for tire temperature to close most of the gap to its target. Balance choice. */
-    public static final double TIRE_TEMP_SECONDS = 12.0;
+    public static final double TIRE_TEMP_SECONDS = 7.0;
 
     /** How much a wet track cools slick tires at full wetness (fraction of heating removed). */
     public static final double SLICK_WET_COOLING = 0.4;
@@ -495,7 +576,7 @@ public final class Tuning {
     public static final double WET_TIRE_OVERHEAT = 1.0;
 
     /** Degrees above the window that double the wear rate. Balance choice. */
-    public static final double OVERHEAT_WEAR_DEGREES = 30.0;
+    public static final double OVERHEAT_WEAR_DEGREES = 45.0;
 
     /** Degrees outside the window at which grip has fallen to MIN_TEMP_GRIP. Balance choice. */
     public static final double TEMP_FALLOFF_DEGREES = 35.0;
@@ -534,13 +615,13 @@ public final class Tuning {
     public static final double BRAKE_START_TEMP = 300.0;
 
     /** Degrees per second gained per unit of braking power (deceleration times speed). Balance choice. */
-    public static final double BRAKE_HEATING = 0.22;
+    public static final double BRAKE_HEATING = 0.27;
 
     /** Base fraction of the gap to air temperature lost per second. Balance choice. */
-    public static final double BRAKE_COOLING_BASE = 0.03;
+    public static final double BRAKE_COOLING_BASE = 0.045;
 
     /** Extra cooling fraction per second for each m/s of speed. Balance choice. */
-    public static final double BRAKE_COOLING_PER_SPEED = 0.0016;
+    public static final double BRAKE_COOLING_PER_SPEED = 0.0024;
 
     /** Brake temperature where fade starts, in Celsius. Carbon brakes work up to about 1000 C. */
     public static final double BRAKE_FADE_TEMP = 1000.0;
@@ -558,13 +639,13 @@ public final class Tuning {
     public static final double ERS_START_CHARGE = 0.9;
 
     /** Charge gained per second of 1 g braking. Balance choice: about a quarter battery per lap. */
-    public static final double ERS_HARVEST_PER_G_SECOND = 0.012;
+    public static final double ERS_HARVEST_PER_G_SECOND = 0.02;
 
-    /** Charge spent per second of deploying: a full battery lasts 20 s. Balance choice. */
-    public static final double ERS_DEPLOY_PER_SECOND = 0.05;
+    /** Charge spent per second of deploying: a full battery lasts 10 s. Balance choice. */
+    public static final double ERS_DEPLOY_PER_SECOND = 0.10;
 
-    /** Speed gain while deploying, as a fraction. Balance choice. */
-    public static final double ERS_SPEED_BOOST = 0.03;
+    /** Speed gain while deploying, as a fraction: big enough to see the car surge. Balance choice. */
+    public static final double ERS_SPEED_BOOST = 0.08;
 
     /** Computer drivers deploy on straights while the battery is above this. Balance choice. */
     public static final double AI_ERS_DEPLOY_ABOVE = 0.45;

@@ -10,6 +10,7 @@ package ui <<Frame>> {
     -details : GLabel
     -footer : GLabel
     -attack : UiButton
+    -outside : UiButton
     -defend : UiButton
     -hold : UiButton
     -countdown : GRect
@@ -38,17 +39,19 @@ package ui <<Frame>> {
     +Camera(WorldView, TrackDrawing, double, double, double, double)
     +toggleOverview() : void
     +isOverview() : boolean
-    +update(Car) : void
+    +update(Car, boolean) : void
   }
   class CarSprite {
     -car : Car
     -parts : List<GPolygon>
     -ring : GOval
+    -glow : GPolygon
     -alert : GPolygon
     -appliedDegrees : double
     -appliedEnlargement : double
     {static} 3 constants
     +CarSprite(Car, boolean)
+    +getGlow() : GPolygon
     +getAlert() : GPolygon
     +setAlert(boolean) : void
     +getParts() : List<GPolygon>
@@ -166,7 +169,7 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 34 constants
+    {static} 36 constants
     +label(String, Font, Color) : GLabel
     +panel(double, double) : GRect
     +background(double, double) : GRect
@@ -189,6 +192,8 @@ package ui <<Frame>> {
     -race : Race
     -world : WorldView
     -camera : Camera
+    -weather : WeatherOverlay
+    -lastFrameSeconds : double
     -tower : TimingTower
     -miniMap : MiniMap
     -hud : HudPanel
@@ -268,6 +273,8 @@ package ui <<Frame>> {
     -buttons : ButtonGroup
     -undo : Deque<StrategyChoice>
     -presetButtons : List<UiButton>
+    -lengthButtons : List<UiButton>
+    -length : RaceLength
     -stintButtons : List<UiButton>
     -pushButtons : List<UiButton>
     -race : Race
@@ -281,6 +288,7 @@ package ui <<Frame>> {
     -conditionsLine : GLabel
     -gridRows : GLabel[]
     -ruleLine : GLabel
+    -lengthLine : GLabel
     -carsLine : GLabel
     -undoButton : UiButton
     {static} 2 constants
@@ -306,7 +314,7 @@ package ui <<Frame>> {
   }
   class TrackDrawing {
     -track : Track
-    {static} 6 constants
+    {static} 5 constants
     +TrackDrawing(Track)
     +getTrack() : Track
     +lateralToDrawing(double) : double
@@ -321,6 +329,25 @@ package ui <<Frame>> {
   }
   class TrackOutline {
     +fit(Track, double, double) : GPolygon
+  }
+  class TrackRaster {
+    -drawing : TrackDrawing
+    -garageColors : List<Color>
+    -cx : double[]
+    -cy : double[]
+    -nx : double[]
+    -ny : double[]
+    -kerb : boolean[]
+    -inside : int[]
+    -left : double
+    -top : double
+    -width : int
+    -height : int
+    -bucketsX : int
+    -bucketsY : int
+    -buckets : List<List<Integer>>
+    {static} 14 constants
+    +build(TrackDrawing, List<Team>) : GImage
   }
   class TrackSelectScreen {
     -manager : ScreenManager
@@ -342,21 +369,28 @@ package ui <<Frame>> {
     +setEnabled(boolean) : void
     +isEnabled() : boolean
   }
+  class WeatherOverlay {
+    -width : double
+    -height : double
+    -tint : GRect
+    -streaks : List<GLine>
+    -random : Random
+    -shownTint : int
+    {static} 6 constants
+    +WeatherOverlay(double, double)
+    +update(TrackConditions, double) : void
+  }
   class WorldView {
     -drawing : TrackDrawing
-    -asphaltChunks : List<GPolygon>
-    -chunkMiddles : List<Double>
-    -chunkLevels : List<Integer>
     -sprites : List<CarSprite>
     -zoom : double
-    {static} 13 constants
+    {static} 4 constants
     +WorldView(Race, TrackDrawing)
     +setZoom(double) : void
     +getZoom() : double
     +updateCars(Car) : void
     +toPixelX(double) : double
     +toPixelY(double) : double
-    +updateWetness(TrackConditions) : void
   }
 }
 package sim <<Frame>> {
@@ -371,6 +405,9 @@ package sim <<Frame>> {
     -attackerStance : Stance
     -defenderStance : Stance
     -playerLocked : boolean
+    -attackerEngaged : boolean
+    -pulledOut : boolean
+    -defenderEngaged : boolean
     -outcome : BattleOutcome
     -message : String
     +choosePlayerStance(Stance) : void
@@ -378,6 +415,12 @@ package sim <<Frame>> {
     +getPlayerStance() : Stance
     +getRival() : Car
     +finish(BattleOutcome, String) : void
+    +markAttackerEngaged() : void
+    +isAttackerEngaged() : boolean
+    +markPulledOut() : void
+    +isPulledOut() : boolean
+    +markDefenderEngaged() : void
+    +isDefenderEngaged() : boolean
     +setAttackerStance(Stance) : void
     +setDefenderStance(Stance) : void
     +getAttacker() : Car
@@ -418,7 +461,7 @@ package sim <<Frame>> {
   }
   class BattleResolver {
     +passProbability(double) : double
-    +attackRisk(Car, double) : double
+    +attackRisk(Car, double, Stance) : double
     +describe(Battle, BattleOutcome) : String
   }
   class Brakes {
@@ -435,8 +478,10 @@ package sim <<Frame>> {
     -gridPosition : int
     -paceFactor : double
     -player : boolean
+    -form : double
     -brakes : Brakes
     -ers : Ers
+    -tireLifeScale : double
     -tire : Tire
     -pushLevel : PushLevel
     -ersWanted : boolean
@@ -447,12 +492,17 @@ package sim <<Frame>> {
     -currentGrip : double
     -lateralOffset : double
     -lateralTarget : double
+    -followLine : boolean
+    -onLine : boolean
+    -lateralRate : double
     -aggression : double
     -intent : Stance
     -intentKey : int
     -lastBattleKey : int
     -passPartner : Car
     -passAttacker : boolean
+    -passGranted : boolean
+    -passAborting : boolean
     -timePenalty : double
     -lateralSpeed : double
     -plan : PitPlan
@@ -472,10 +522,22 @@ package sim <<Frame>> {
     -finishTime : double
     -finishPosition : int
     +targetSpeed(ProfileSet, TrackConditions) : double
+    +updateForm(double) : void
+    +getForm() : double
     +applyTow(double) : void
     +approachSpeed(double, double, double) : void
     +advance(double, double) : void
+    +steer(double, double, double) : void
+    +nudgeLateral(double) : void
+    +returnToLine(double) : void
+    +isOnLine() : boolean
+    +getLateralRate() : double
     +beginPass(Car, boolean, double) : void
+    +pairWith(Car) : void
+    +grantPass() : void
+    +abortPass() : void
+    +isPassGranted() : boolean
+    +isPassAborting() : boolean
     +setLateralTarget(double, double) : void
     +getLateralTarget() : double
     +endPass() : void
@@ -515,6 +577,7 @@ package sim <<Frame>> {
     +completeLap(double) : void
     +finish(double, int) : void
     +capSpeed(double) : void
+    +setTireLifeScale(double) : void
     +fitTires(Compound) : void
     +setPushLevel(PushLevel) : void
     +setErsWanted(boolean) : void
@@ -592,10 +655,13 @@ package sim <<Frame>> {
   class Ers {
     -charge : double
     -deploying : boolean
+    -overtakeMode : boolean
     +Ers()
     +update(double, double, boolean, boolean) : void
     +spend(double) : void
     +boost() : double
+    +setOvertakeMode(boolean) : void
+    +isOvertakeMode() : boolean
     +getCharge() : double
     +isDeploying() : boolean
   }
@@ -742,6 +808,7 @@ package sim <<Frame>> {
     +getBattles() : BattleManager
     +carAheadOnTrack(Car) : Car
     +trackGap(Car, Car) : double
+    +defaultPlan(int) : PitPlan
     +getClassification() : List<Car>
     +setPlayerPlan(PitPlan, PushLevel) : void
     +isWetRace() : boolean
@@ -782,6 +849,16 @@ package sim <<Frame>> {
     +getType() : Type
     +getCar() : Car
   }
+  enum RaceLength {
+    -displayName : String
+    -laps : int
+    -duration : String
+    +getDisplayName() : String
+    +getLaps() : int
+    +getDuration() : String
+    +tireLifeScale(int) : double
+    +compoundRuleApplies(int) : boolean
+  }
   class RaceMessage {
     -time : double
     -text : String
@@ -813,6 +890,13 @@ package sim <<Frame>> {
     +getPlayerSectors() : TreeMap<Integer, double[]>
     +getCornerDelta() : double[]
     +getRace() : Race
+  }
+  class RacingLine {
+    -offset : double[]
+    -curvature : double[]
+    +RacingLine(double[], double[], double[], double)
+    +offsetAt(int) : double
+    +curvatureAt(int) : double
   }
   class RadioEngineer {
     -race : Race
@@ -858,12 +942,14 @@ package sim <<Frame>> {
   }
   enum StrategyPreset {
     -displayName : String
-    -stopLaps : int[]
+    -stopFractions : double[]
     -stints : Compound[]
+    +forRace(int) : List<StrategyPreset>
+    +stopLaps(int) : int[]
     +getDisplayName() : String
     +stintCompound(int) : Compound
     +stintCount() : int
-    +makePlan() : PitPlan
+    +makePlan(int) : PitPlan
   }
   class Team {
     -name : String
@@ -890,6 +976,7 @@ package sim <<Frame>> {
     -profile : TrackProfile
     -samples : ArrayList<TrackSample>
     -spacing : double
+    -racingLine : RacingLine
     -minX : double
     -maxX : double
     -minY : double
@@ -905,6 +992,8 @@ package sim <<Frame>> {
     +getMaxX() : double
     +getMinY() : double
     +getMaxY() : double
+    +lineAt(double) : double
+    +getLineCurvature(int) : double
     +wrap(double) : double
     +indexAt(double) : int
     +xAt(double, double) : double
@@ -981,7 +1070,7 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 178 constants
+    {static} 205 constants
   }
 }
 package ai <<Frame>> {
@@ -995,7 +1084,7 @@ package ai <<Frame>> {
     +playerDefault(Car, double, boolean) : Stance
   }
   class PitStrategyPlanner {
-    +choosePlan(Random) : PitPlan
+    +choosePlan(Random, int) : PitPlan
     +callStops(Car, Race) : void
   }
 }
@@ -1041,6 +1130,7 @@ package data <<Frame>> {
 package lab <<Frame>> {
   class LabCsvWriter {
     +fileFor(String) : File
+    +writeForTrack(LabResult, String) : String
     +write(LabResult, File) : void
   }
   class LabResult {
@@ -1083,11 +1173,12 @@ package lab <<Frame>> {
     -roster : List<Driver>
     -weather : WeatherStats
     -carCount : int
+    -laps : int
     -finished : AtomicInteger
     -planned : volatile int
     {static} 2 constants
-    +StrategyLab(Track, List<Driver>, WeatherStats, int)
-    +variants() : List<StrategyVariant>
+    +StrategyLab(Track, List<Driver>, WeatherStats, int, int)
+    +variants(int) : List<StrategyVariant>
     +run(int, long) : LabResult
     +getFinished() : int
     +getPlanned() : int
@@ -1098,7 +1189,7 @@ package lab <<Frame>> {
     -windowLap : int
     +ofPreset(StrategyPreset) : StrategyVariant
     +pitWindow(int) : StrategyVariant
-    +makePlan() : PitPlan
+    +makePlan(int) : PitPlan
     +getName() : String
     +isWindow() : boolean
     +getWindowLap() : int
@@ -1186,6 +1277,7 @@ RaceScreen --> ScreenManager
 RaceScreen --> Race
 RaceScreen --> WorldView
 RaceScreen --> Camera
+RaceScreen --> WeatherOverlay
 RaceScreen --> TimingTower
 RaceScreen --> MiniMap
 RaceScreen --> HudPanel
@@ -1211,6 +1303,7 @@ SetupScreen --> ScreenManager
 SetupScreen --> Track
 SetupScreen --> ButtonGroup
 SetupScreen --> UiButton
+SetupScreen --> RaceLength
 SetupScreen --> Race
 SetupScreen --> Forecast
 SetupScreen --> PushLevel
@@ -1225,12 +1318,15 @@ TimingTower --> Race
 Tire --> Compound
 Track --> TrackProfile
 Track --> TrackSample
+Track --> RacingLine
 TrackConditions --> Track
 TrackDrawing --> Track
+TrackRaster --> TrackDrawing
 Screen <|.. TrackSelectScreen
 TrackSelectScreen --> ScreenManager
 TrackSelectScreen --> ButtonGroup
 GCompound <|-- UiButton
+GCompound <|-- WeatherOverlay
 GCompound <|-- WorldView
 WorldView --> TrackDrawing
 WorldView --> CarSprite

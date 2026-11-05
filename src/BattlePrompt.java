@@ -34,8 +34,11 @@ public final class BattlePrompt extends GCompound {
     /** Default stance hint, or the result after the battle. */
     private final GLabel footer;
 
-    /** Attack button. */
+    /** Inside attack button. */
     private final UiButton attack;
+
+    /** Outside attack button. */
+    private final UiButton outside;
 
     /** Defend button. */
     private final UiButton defend;
@@ -57,9 +60,10 @@ public final class BattlePrompt extends GCompound {
         add(panel);
         headline = text(12, 26, Palette.HEADLINE.deriveFont(20f), Palette.TEXT);
         details = text(12, 50, Palette.SMALL, Palette.TEXT_DIM);
-        attack = button("A  Attack", 12);
-        defend = button("S  Defend", 12 + 168);
-        hold = button("D  Hold", 12 + 336);
+        attack = button("A  Inside", 12);
+        outside = button("O  Outside", 12 + 126);
+        defend = button("S  Defend", 12 + 252);
+        hold = button("D  Hold", 12 + 378);
         countdown = new GRect(12, 106, BAR_WIDTH, 6);
         countdown.setFilled(true);
         countdown.setFillColor(Palette.DANGER);
@@ -93,7 +97,7 @@ public final class BattlePrompt extends GCompound {
      * @return the button
      */
     private UiButton button(String text, double x) {
-        UiButton b = new UiButton(text, 160, 34);
+        UiButton b = new UiButton(text, 118, 34);
         add(b, x, 62);
         return b;
     }
@@ -112,7 +116,8 @@ public final class BattlePrompt extends GCompound {
         String code = rival.getDriver().getCode();
         headline.setLabel(String.format(Locale.ROOT, "TURN %d  %s %s", battle.getCorner().getNumber(),
                 attacking ? "ATTACKING" : "DEFENDING AGAINST", code));
-        double risk = BattleResolver.attackRisk(battle.getAttacker(), race.getConditions().wetnessAt(battle.getCorner().getBrakingPoint()));
+        double risk = BattleResolver.attackRisk(battle.getAttacker(),
+                race.getConditions().wetnessAt(battle.getCorner().getBrakingPoint()), Stance.ATTACK);
         String riskText = risk < Tuning.RISK_BASE * 2 ? "low" : risk < Tuning.RISK_BASE * 4 ? "medium" : "high";
         details.setLabel(String.format(Locale.ROOT,
                 "Gap %.2f s   Grip you %.0f%% / %s %.0f%%   ERS you %.0f%% / %s %.0f%%   %s risk %s",
@@ -120,9 +125,11 @@ public final class BattlePrompt extends GCompound {
                 player.getErs().getCharge() * 100, code, rival.getErs().getCharge() * 100,
                 attacking ? "Your" : "Their", riskText));
         attack.setEnabled(attacking);
+        outside.setEnabled(attacking);
         defend.setEnabled(!attacking);
         Stance chosen = battle.getPlayerStance();
         attack.setHighlighted(chosen == Stance.ATTACK);
+        outside.setHighlighted(chosen == Stance.OUTSIDE);
         defend.setHighlighted(chosen == Stance.DEFEND);
         hold.setHighlighted(chosen == Stance.HOLD);
         double fraction = Math.max(0, Math.min(1, secondsLeft / Tuning.BATTLE_DECISION_SECONDS));
@@ -161,6 +168,9 @@ public final class BattlePrompt extends GCompound {
         }
         if (hit == attack || hit.getParent() == attack) {
             return attack.isEnabled() ? Stance.ATTACK : null;
+        }
+        if (hit == outside || hit.getParent() == outside) {
+            return outside.isEnabled() ? Stance.OUTSIDE : null;
         }
         if (hit == defend || hit.getParent() == defend) {
             return defend.isEnabled() ? Stance.DEFEND : null;

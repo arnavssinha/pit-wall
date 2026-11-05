@@ -210,3 +210,36 @@ order. The self-test now includes early rain and a safety car: 59.3 FPS, no exce
 196 races in 14.9 s on 4 cores against a 60 s target). Results and Lab screens checked with screenshots.
 
 **Next:** M8 (all six tracks, real data export, roster check, balance), M9 (docs, demo mode, final audit).
+
+## Feedback pass: visuals, pace, racing line, overtaking, race length (2026-11-06)
+
+Owner feedback after M7. These changes override parts of the original brief (fixed 10 laps; passes
+resolved only at braking zones); the owner asked for them.
+
+**Done**
+- Track drawing: the scenery is now one picture painted pixel by pixel (`TrackRaster`): each pixel's
+  sideways distance from the nearest centerline point picks asphalt, edge line, kerb, run-off, gravel,
+  pit lane or garage, with smoothed edges. Corners stay clean at any width (the old polygon strips folded
+  over in tight bends). Built from an int[][] pixel array via ACM's GImage, so no java.awt.Graphics.
+  Objects on screen fell from about 950 to about 690.
+- Racing line (`RacingLine`): repeated smoothing ("stiff rubber band") within the track width gives the
+  outside-inside-outside line. Cars ride it, the speed profile uses its curvature (the calibration adapted
+  automatically), and car drawings point where they are actually going.
+- Overtaking: battles open up to 4 s before a braking zone, so moves start on the straights. Choices are
+  Inside (A), Outside (O), Defend (S) and Hold (D). Attackers tuck into the slipstream, then pull out;
+  defenders move across to cover the inside; computer attackers switch sides if the door is shut. Cars can
+  run side by side and drag past on the straight. At the braking point the pass formula now includes how
+  far alongside the attacker is. A failed attacker visibly backs off. Never guaranteed: about 22 percent
+  of attacks succeed at Monza (about 20 passes per race), far fewer against a car that covers.
+- Overtake mode (from the 2026 rules): extra ERS power for a car within a second of the car ahead.
+- Pace: default speed 4x; tire temperature reacts in about 7 s, brakes heat and cool faster; ERS gives
+  +8 percent with a blue exhaust flame; computer drivers push and deploy while fighting; every car's form
+  wanders slightly; time slows to 0.35x in battles and the camera zooms in.
+- Race length (`RaceLength`): 1-lap shootout, 3-lap sprint (about 1 minute at 4x), 12-lap race (about
+  5 minutes). Tire life scales with length; strategy stops are fractions of the race; No stop is offered
+  (and the two-compound rule is off) below 5 laps. The Lab uses the race length of your last race.
+- Rain effects: falling streaks and a tint that deepens with track wetness.
+- ERS deploy switches itself off when the battery is flat (one radio message instead of repeats).
+
+**Verified:** 33/33 tests (including short races), audit clean, self-test 59.5 FPS with 685 objects,
+Lab 196 races in about 20 s on 4 cores. Screenshots of setup, battles, chicanes and rain.

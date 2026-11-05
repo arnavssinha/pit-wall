@@ -1,7 +1,7 @@
 /**
  * The fastest safe speed at every sample of a track, including braking ahead of corners.
  * It is built in two passes:
- * first, each sample gets its corner speed limit from its curvature;
+ * first, each sample gets its corner speed limit from the racing line's curvature there;
  * second, walking backwards around the lap, each sample is lowered so a car can still brake
  * in time for the slower samples ahead. A car that follows this profile brakes before corners
  * and never arrives too fast.
@@ -34,7 +34,7 @@ public final class SpeedProfile {
         cornerLimit = new double[n];
         target = new double[n];
         for (int i = 0; i < n; i++) {
-            cornerLimit[i] = CarPhysics.cornerSpeedLimit(track.getSample(i).getCurvature(), gripScale, topSpeed);
+            cornerLimit[i] = CarPhysics.cornerSpeedLimit(track.getLineCurvature(i), gripScale, topSpeed);
             target[i] = cornerLimit[i];
         }
         applyBraking(track.getSpacing());

@@ -77,9 +77,10 @@ public final class Camera {
      * Eases zoom and position one frame toward the current mode's target and moves the world.
      *
      * @param focus the car to follow in follow mode
+     * @param battle true while the player is in a battle, which zooms in closer
      */
-    public void update(Car focus) {
-        double targetZoom = overview ? overviewZoom : FOLLOW_ZOOM;
+    public void update(Car focus, boolean battle) {
+        double targetZoom = overview ? overviewZoom : FOLLOW_ZOOM * (battle ? Tuning.BATTLE_ZOOM : 1.0);
         double zoom = world.getZoom();
         if (Math.abs(targetZoom - zoom) < targetZoom * 0.002) {
             zoom = targetZoom;

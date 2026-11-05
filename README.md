@@ -30,13 +30,13 @@ you make the strategy calls.
 |---|---|
 | Q / W / E | Push level: Conserve / Balanced / Push |
 | X | ERS deploy on or off (spends the battery on straights for extra speed) |
-| A / S / D | In a battle: Attack / Defend / Hold (or click the buttons). Pressed outside a battle, it pre-selects your stance for the next one |
+| A / O / S / D | In a battle: Inside lunge / Around the outside / Defend (cover the inside) / Hold (or click the buttons). Pressed outside a battle, it pre-selects your stance for the next one |
 | B | Box this lap (press again to cancel). Your plan also calls its stops automatically |
 | N | Box next lap |
 | 1-5 | Tires for the stop: Soft, Medium, Hard, Intermediate, Wet |
 | Esc | Back to the menu |
 | Space | Pause or resume |
-| T | Change time speed: 1x, 2x, 4x, 8x (starts at 2x) |
+| T | Change time speed: 1x, 2x, 4x, 8x (starts at 4x) |
 | Z | Switch between follow camera and whole-track view |
 | F | Camera follows the next car down the order (Shift-F: the car ahead) |
 | G | Camera goes back to your car |
@@ -47,10 +47,14 @@ you make the strategy calls.
 
 1. **Menu, then Track Select** (Monza for now), **then Setup.** On the setup screen you see which driver
    you were given and where they start (from a simulated qualifying session). You pick a strategy
-   (one-stop early, one-stop late or two-stop), the tires for each stint, the number of cars (10 to 22)
-   and your baseline push level. Undo (U) takes back strategy edits.
+   (one-stop early, one-stop late, two-stop, or no stop in short races), the tires for each stint, the
+   race length (1-lap shootout, 3-lap sprint of about a minute, or 12-lap race of about five minutes,
+   keys 1-3), the number of cars (10 to 22) and your baseline push level. Undo (U) takes back strategy edits.
 2. **The race.** The car drives itself. Watch the gauges and adjust the push level (Q/W/E). When a rival
-   is close at a braking zone, time slows down and you choose Attack, Defend or Hold (A/S/D).
+   is close before a braking zone, time slows and you choose: dive down the Inside (A), go around the
+   Outside (O), Defend by covering the inside (S) or Hold (D). Attackers pull out of the slipstream,
+   defenders move across, and cars can draw alongside and pass on the straight. ERS (X) gives a clear
+   boost (blue exhaust); within a second of the car ahead you also get overtake mode.
    A red triangle over a rival means they are about to attack you.
 3. **Weather and incidents.** The setup screen shows a forecast (press V for different weather). Rain
    wets the track gradually and some corners dry before others; slicks fall off a cliff on a wet track.

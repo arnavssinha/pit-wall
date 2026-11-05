@@ -18,8 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class StrategyLab {
 
-    /** Stop laps tried in the pit-window sweep. */
-    private static final int[] WINDOW_LAPS = {2, 4, 6, 8};
+    /** Where the pit-window sweep stops, as fractions of the race. */
+    private static final double[] WINDOW_FRACTIONS = {0.2, 0.4, 0.6, 0.8};
 
     /** Longest a single lab race may run, in race seconds (a guard; real races take about 15 minutes). */
     private static final double MAX_RACE_SECONDS = 3600;
@@ -36,6 +36,9 @@ public final class StrategyLab {
     /** Number of cars per race. */
     private final int carCount;
 
+    /** Race length in laps. */
+    private final int laps;
+
     /** Races finished so far in the current run (read by the screen for its progress bar). */
     private final AtomicInteger finished = new AtomicInteger();
 
@@ -49,26 +52,35 @@ public final class StrategyLab {
      * @param roster every driver
      * @param weather the track's weather statistics, or null
      * @param carCount number of cars per race
+     * @param laps race length in laps
      */
-    public StrategyLab(Track track, List<Driver> roster, WeatherStats weather, int carCount) {
+    public StrategyLab(Track track, List<Driver> roster, WeatherStats weather, int carCount, int laps) {
         this.track = track;
         this.roster = roster;
         this.weather = weather;
         this.carCount = carCount;
+        this.laps = laps;
     }
 
     /**
-     * Returns the strategies the lab compares: the three presets, then the pit-window sweep.
+     * Returns the strategies the lab compares for a race length: the presets that fit, then a
+     * one-stop pit-window sweep (when the race is long enough to stop on different laps).
      *
+     * @param laps race length in laps
      * @return the variants
      */
-    public static List<StrategyVariant> variants() {
+    public static List<StrategyVariant> variants(int laps) {
         List<StrategyVariant> list = new ArrayList<StrategyVariant>();
-        for (StrategyPreset preset : StrategyPreset.values()) {
+        for (StrategyPreset preset : StrategyPreset.forRace(laps)) {
             list.add(StrategyVariant.ofPreset(preset));
         }
-        for (int lap : WINDOW_LAPS) {
-            list.add(StrategyVariant.pitWindow(lap));
+        List<Integer> used = new ArrayList<Integer>();
+        for (double f : WINDOW_FRACTIONS) {
+            int lap = Math.max(1, Math.min(laps - 1, (int) Math.round(f * laps)));
+            if (laps >= Tuning.COMPOUND_RULE_MIN_LAPS && !used.contains(lap)) {
+                used.add(lap);
+                list.add(StrategyVariant.pitWindow(lap));
+            }
         }
         return list;
     }
@@ -82,7 +94,7 @@ public final class StrategyLab {
      * @return the summary
      */
     public LabResult run(int totalRaces, long baseSeed) {
-        List<StrategyVariant> variants = variants();
+        List<StrategyVariant> variants = variants(laps);
         int scenarios = Math.max(1, totalRaces / variants.size());
         planned = scenarios * variants.size();
         finished.set(0);
@@ -120,13 +132,13 @@ public final class StrategyLab {
      * @return the player's outcome
      */
     private LabRun raceOnce(StrategyVariant variant, long seed) {
-        Race race = new Race(new RaceConfig(carCount, Tuning.RACE_LAPS, seed), track, roster);
+        Race race = new Race(new RaceConfig(carCount, laps, seed), track, roster);
         Forecast forecast = null;
         if (weather != null) {
-            forecast = ForecastGenerator.generate(weather, track.getProfile(), Tuning.RACE_LAPS, new Random(seed * 31 + 7));
+            forecast = ForecastGenerator.generate(weather, track.getProfile(), laps, new Random(seed * 31 + 7));
             race.applyForecast(forecast);
         }
-        race.setPlayerPlan(variant.makePlan(), PushLevel.BALANCED);
+        race.setPlayerPlan(variant.makePlan(laps), PushLevel.BALANCED);
         race.runToEnd(MAX_RACE_SECONDS);
         Car player = race.getPlayerCar();
         String status = player.isDisqualified() ? "DSQ" : player.isRetired() ? "DNF" : "Finished";

@@ -11,25 +11,30 @@ public final class AiDriver {
     }
 
     /**
-     * Chooses a push level: Balanced normally, Conserve once the tires reach the wear cliff
-     * so they can last to the end of the stint.
+     * Chooses a push level: Push while fighting another car wheel to wheel, Conserve once the tires
+     * reach the wear cliff so they last the stint, and Balanced otherwise.
      *
      * @param car the computer car
      * @return the push level
      */
     public static PushLevel choosePush(Car car) {
+        if (car.getPassPartner() != null) {
+            return PushLevel.PUSH;
+        }
         return car.getTire().getWear() >= Tuning.WEAR_CLIFF ? PushLevel.CONSERVE : PushLevel.BALANCED;
     }
 
     /**
-     * Decides whether to deploy battery energy on the straights: only while comfortably charged,
-     * so there is energy left for battles.
+     * Decides whether to deploy battery energy on the straights: whenever there is some charge while
+     * fighting wheel to wheel, otherwise only while comfortably charged so energy is left for battles.
      *
      * @param car the computer car
      * @return true to deploy
      */
     public static boolean wantsDeploy(Car car) {
-        return car.getErs().getCharge() > Tuning.AI_ERS_DEPLOY_ABOVE;
+        boolean fighting = car.getPassPartner() != null && car.isPassAttacker() && !car.isPassAborting();
+        double needed = fighting ? Tuning.AI_FIGHT_ERS_ABOVE : Tuning.AI_ERS_DEPLOY_ABOVE;
+        return car.getErs().getCharge() > needed;
     }
 
     /**

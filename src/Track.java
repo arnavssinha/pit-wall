@@ -21,6 +21,9 @@ public final class Track {
     /** Exact spacing between samples in meters (the lap length divided by the sample count). */
     private final double spacing;
 
+    /** The racing line cars follow. */
+    private final RacingLine racingLine;
+
     /** Smallest x of the centerline in meters, used to frame the camera and minimap. */
     private final double minX;
 
@@ -51,6 +54,16 @@ public final class Track {
         this.spacing = profile.getLapLengthMeters() / count;
         List<double[]> even = resample(scaled, count, spacing);
         this.samples = buildSamples(even, spacing);
+        int n = samples.size();
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        double[] hs = new double[n];
+        for (int i = 0; i < n; i++) {
+            xs[i] = samples.get(i).getX();
+            ys[i] = samples.get(i).getY();
+            hs[i] = samples.get(i).getHeading();
+        }
+        this.racingLine = new RacingLine(xs, ys, hs, spacing);
         double lowX = Double.MAX_VALUE;
         double highX = -Double.MAX_VALUE;
         double lowY = Double.MAX_VALUE;
@@ -156,6 +169,29 @@ public final class Track {
      */
     public double getMaxY() {
         return maxY;
+    }
+
+    /**
+     * Returns the racing line's sideways position at a point, blended between samples.
+     *
+     * @param distance distance along the lap in meters
+     * @return offset from the centerline in meters, positive to the left
+     */
+    public double lineAt(double distance) {
+        double d = wrap(distance);
+        int i = indexAt(d);
+        double t = (d - samples.get(i).getDistance()) / spacing;
+        return racingLine.offsetAt(i) + (racingLine.offsetAt(i + 1) - racingLine.offsetAt(i)) * t;
+    }
+
+    /**
+     * Returns the racing line's curvature at a sample, which sets the corner speed there.
+     *
+     * @param index sample index (wrapped)
+     * @return curvature in 1 per meter
+     */
+    public double getLineCurvature(int index) {
+        return racingLine.curvatureAt(index);
     }
 
     /**

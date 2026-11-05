@@ -36,7 +36,7 @@ public final class Tire {
      * @param meters distance driven this step
      * @param load how hard the car is working now (1 on a straight, more in corners and braking)
      * @param meanLoad the track's average load over a lap, so heat and wear are fair across tracks
-     * @param lapLength lap length in meters
+     * @param lapLength lap length in meters, stretched by the race's tire life scale (longer means slower wear)
      * @param push the current push level
      * @param trackWearMultiplier how abrasive the track is (1.0 is neutral)
      * @param ambient mix of track and air temperature in Celsius
