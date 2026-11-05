@@ -132,7 +132,10 @@ public final class BattleManager {
 
     /**
      * Runs once per step after cars move: resolves battles whose braking point has been reached and
-     * finishes passes that are complete.
+     * finishes passes that are complete. Once a passing car is half a car length ahead, both cars head
+     * back to the racing line (the side-by-side room rule stops them touching), so the passing car
+     * moves across in front and the passed car tucks in behind, as in a real overtake. An attacker that
+     * was told to back off but is already half a car ahead keeps the place instead (it has made the move stick).
      */
     public void afterMove() {
         for (int i = open.size() - 1; i >= 0; i--) {
@@ -150,6 +153,17 @@ public final class BattleManager {
             double half = race.getTrack().getLapLength() / 2;
             double ahead = race.trackGap(partner, car);
             double behind = race.trackGap(car, partner);
+            if (car.isPassAborting() && ahead > Tuning.MIN_SEPARATION / 2 && ahead < half) {
+                car.grantPass();
+            }
+            if (car.isPassGranted() && ahead > Tuning.MIN_SEPARATION / 2 && ahead < half) {
+                if (!car.isFollowingLine()) {
+                    car.returnToLine(Tuning.LATERAL_SPEED);
+                }
+                if (!partner.isFollowingLine() && !partner.isOffTrack()) {
+                    partner.returnToLine(Tuning.LATERAL_SPEED);
+                }
+            }
             boolean clearAhead = car.isPassGranted() && ahead >= Tuning.MIN_SEPARATION && ahead < half;
             boolean clearBehind = car.isPassAborting() && behind >= Tuning.MIN_SEPARATION && behind < half;
             boolean broken = partner.isRetired() || car.isRetired() || partner.isInPitLane() || car.isInPitLane()
@@ -288,9 +302,10 @@ public final class BattleManager {
             d.returnToLine(Tuning.COVER_SPEED);
         }
         boolean aboutPlayer = a.isPlayer() || d.isPlayer();
-        boolean quiet = outcome == BattleOutcome.NO_ATTEMPT && battle.getDefenderStance() != Stance.DEFEND;
-        if ((aboutPlayer && !quiet) || outcome == BattleOutcome.CONTACT) {
-            race.addMessage(battle.getMessage(), aboutPlayer);
+        boolean newsworthy = outcome == BattleOutcome.PASSED || outcome == BattleOutcome.CONTACT
+                || (battle.promptsPlayer() && attacked);
+        if (aboutPlayer && newsworthy) {
+            race.addMessage(battle.getMessage(), true);
         }
     }
 

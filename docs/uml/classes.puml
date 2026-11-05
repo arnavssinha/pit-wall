@@ -46,10 +46,12 @@ package ui <<Frame>> {
     -parts : List<GPolygon>
     -ring : GOval
     -glow : GPolygon
+    -rearWing : GPolygon
+    -wingOpen : boolean
     -alert : GPolygon
     -appliedDegrees : double
     -appliedEnlargement : double
-    {static} 3 constants
+    {static} 4 constants
     +CarSprite(Car, boolean)
     +getGlow() : GPolygon
     +getAlert() : GPolygon
@@ -97,6 +99,7 @@ package ui <<Frame>> {
     -brakeTemp : GaugeBar
     -battery : GaugeBar
     -ersLine : GLabel
+    -drsLine : GLabel
     -wetGauge : GaugeBar
     -weatherLine : GLabel
     -shownCompound : Compound
@@ -169,7 +172,7 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 36 constants
+    {static} 37 constants
     +label(String, Font, Color) : GLabel
     +panel(double, double) : GRect
     +background(double, double) : GRect
@@ -346,7 +349,7 @@ package ui <<Frame>> {
     -bucketsX : int
     -bucketsY : int
     -buckets : List<List<Integer>>
-    {static} 14 constants
+    {static} 13 constants
     +build(TrackDrawing, List<Team>) : GImage
   }
   class TrackSelectScreen {
@@ -514,6 +517,8 @@ package sim <<Frame>> {
     -usedCompounds : EnumSet<Compound>
     -disqualified : boolean
     -retired : boolean
+    -drsZone : int
+    -drsOpen : boolean
     -lapsCompleted : int
     -lapStartTime : double
     -lastLapTime : double
@@ -522,6 +527,9 @@ package sim <<Frame>> {
     -finishTime : double
     -finishPosition : int
     +targetSpeed(ProfileSet, TrackConditions) : double
+    +setDrs(int, boolean) : void
+    +getDrsZone() : int
+    +isDrsOpen() : boolean
     +updateForm(double) : void
     +getForm() : double
     +applyTow(double) : void
@@ -530,6 +538,7 @@ package sim <<Frame>> {
     +steer(double, double, double) : void
     +nudgeLateral(double) : void
     +returnToLine(double) : void
+    +isFollowingLine() : boolean
     +isOnLine() : boolean
     +getLateralRate() : double
     +beginPass(Car, boolean, double) : void
@@ -652,16 +661,22 @@ package sim <<Frame>> {
     +getName() : String
     +getTeam() : Team
   }
+  class DrsZones {
+    -zones : ArrayList<double[]>
+    -track : Track
+    +DrsZones(Track, ProfileSet)
+    +size() : int
+    +getZones() : List<double[]>
+    +detectionCrossed(double, double) : int
+    +zoneAt(double) : int
+  }
   class Ers {
     -charge : double
     -deploying : boolean
-    -overtakeMode : boolean
     +Ers()
     +update(double, double, boolean, boolean) : void
     +spend(double) : void
     +boost() : double
-    +setOvertakeMode(boolean) : void
-    +isOvertakeMode() : boolean
     +getCharge() : double
     +isDeploying() : boolean
   }
@@ -699,12 +714,20 @@ package sim <<Frame>> {
     -random : Random
     -entry : double
     -exit : double
-    -box : double
+    -mergingSince : HashMap<Car, Double>
+    -rejoining : HashSet<Car>
+    -teams : ArrayList<Team>
+    -boxByTeam : HashMap<Team, Double>
     -laneOffset : double
+    -boxOffset : double
+    -exitEdgeOffset : double
     +PitLane(Race, Random)
     +beforeMove() : void
     +speedLimit(Car) : double
     +afterMove(Car, double, double, double) : void
+    +boxOf(Car) : double
+    +getTeams() : List<Team>
+    +boxOf(Team) : double
   }
   enum PitPhase {
   }
@@ -766,6 +789,8 @@ package sim <<Frame>> {
     -config : RaceConfig
     -track : Track
     -profiles : ProfileSet
+    -drsZones : DrsZones
+    -drsAnnounced : boolean
     -conditions : TrackConditions
     -rain : RainEvent
     -forecast : Forecast
@@ -790,6 +815,7 @@ package sim <<Frame>> {
     -loopOrigin : double
     -time : double
     -finishedCount : int
+    {static} 1 constants
     +Race(RaceConfig, Track, List<Driver>)
     +step() : void
     +applyForecast(Forecast) : void
@@ -798,7 +824,11 @@ package sim <<Frame>> {
     +scheduleRetirement(double, Car) : void
     +getForecast() : Forecast
     +getRain() : RainEvent
+    +getPitLane() : PitLane
     +getSafetyCar() : SafetyCar
+    +isDrsAllowed() : boolean
+    +getDrsZones() : DrsZones
+    +hasCarAlongside(Car, boolean) : boolean
     +slipstreamFactor(double, double, boolean) : double
     +getQualifying() : List<QualifyingEntry>
     +sideBySide(Car, Car) : boolean
@@ -901,6 +931,7 @@ package sim <<Frame>> {
   class RadioEngineer {
     -race : Race
     -lastSent : HashMap<String, Double>
+    -lastAnyMessage : double
     -lastCheck : double
     -lastGapBehind : double
     +RadioEngineer(Race)
@@ -1070,7 +1101,7 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 205 constants
+    {static} 229 constants
   }
 }
 package ai <<Frame>> {
@@ -1220,6 +1251,7 @@ Car --> Compound
 CarSprite --> Car
 GCompound <|-- DebugOverlay
 Driver --> Team
+DrsZones --> Track
 EventQueue --> RaceEvent
 Forecast --> RainEvent
 GCompound <|-- GaugeBar
@@ -1245,6 +1277,8 @@ MenuScreen --> ButtonGroup
 GCompound <|-- MiniMap
 MiniMap --> Race
 PitLane --> Race
+PitLane --> Car
+PitLane --> Team
 PitPlan --> Compound
 PitPlan --> PitStop
 PitStop --> Compound
@@ -1256,6 +1290,7 @@ QualifyingEntry --> Driver
 Race --> RaceConfig
 Race --> Track
 Race --> ProfileSet
+Race --> DrsZones
 Race --> TrackConditions
 Race --> RainEvent
 Race --> Forecast

@@ -33,6 +33,7 @@ sim BattleOutcome.java
 sim BattleResolver.java
 sim BattleManager.java
 sim RaceMessage.java
+sim DrsZones.java
 sim PitStop.java
 sim PitPlan.java
 sim PitPhase.java

@@ -66,14 +66,28 @@ public final class Tuning {
     /** Curvature (1 per meter) above which a sample counts as part of a corner, for kerbs. */
     public static final double CORNER_CURVATURE = 1.0 / 220.0;
 
-    /** Track width in meters. Real F1 circuits are 12 to 15 m wide; 12 m is a drawing choice. */
-    public static final double TRACK_WIDTH = 12.0;
+    /** Tightest corner radius the drawn track may have, in meters, so the wide drawn track never folds. Style choice. */
+    public static final double MIN_CORNER_RADIUS = 40.0;
 
-    /** Car length in meters, close to a 2026 F1 car. Used for spacing and drawing. */
-    public static final double CAR_LENGTH = 5.4;
+    /** Most smoothing passes used to round off corners tighter than MIN_CORNER_RADIUS. */
+    public static final int CORNER_EASING_MAX_PASSES = 4000;
 
-    /** Car width in meters, close to a 2026 F1 car. Used for drawing. */
-    public static final double CAR_WIDTH = 1.9;
+    /** Neighbouring samples on each side eased together with a too-tight one. */
+    public static final int CORNER_EASING_REACH = 2;
+
+    /**
+     * Track width in meters of the game world. The game world is stylized: the lap keeps its real
+     * length, but the track, the cars and every sideways distance are about four times their real
+     * size (a real track is 12 to 15 m wide and a car is 1.9 m wide), so the cars are easy to see
+     * and the picture is drawn at one scale in every direction. Style choice.
+     */
+    public static final double TRACK_WIDTH = 56.0;
+
+    /** Car length in game-world meters (stylized, see TRACK_WIDTH). Used for drawing. */
+    public static final double CAR_LENGTH = 20.0;
+
+    /** Car width in game-world meters (stylized, see TRACK_WIDTH). Used for drawing and side-by-side room. */
+    public static final double CAR_WIDTH = 7.2;
 
     /**
      * Smallest allowed nose-to-nose distance between two cars, in meters. Balance choice made for
@@ -98,10 +112,10 @@ public final class Tuning {
     public static final double GRID_FIRST_SLOT_OFFSET = 14.0;
 
     /** Sideways offset of grid slots from the centerline, alternating left and right, in meters. */
-    public static final double GRID_LATERAL_OFFSET = 2.5;
+    public static final double GRID_LATERAL_OFFSET = 8.5;
 
     /** Rate at which a car moves sideways (off the grid, into and out of a pass), in meters per second. */
-    public static final double LATERAL_SPEED = 2.5;
+    public static final double LATERAL_SPEED = 9.0;
 
     /**
      * Random per-car pace spread for one race, as a fraction (plus or minus). Balance choice:
@@ -165,7 +179,7 @@ public final class Tuning {
     public static final double CORNER_EASY_SPEED_DROP = 60.0;
 
     /** Constant term of the pass score. Balance choice. */
-    public static final double PASS_BASE_SCORE = 0.0;
+    public static final double PASS_BASE_SCORE = -0.5;
 
     /** Pass score per unit of speed-scale advantage (0.01 = 1 percent faster gives 0.4). Balance choice. */
     public static final double PASS_PACE_WEIGHT = 40.0;
@@ -261,13 +275,13 @@ public final class Tuning {
     public static final double PENALTY_SPEED_FRACTION = 0.7;
 
     /** Sideways offset of the attacker while passing, in meters. */
-    public static final double PASS_LATERAL = 2.6;
+    public static final double PASS_LATERAL = 12.0;
 
     /** Sideways offset of the defender while being passed, in meters (to the other side). */
-    public static final double DEFENDER_LATERAL = 1.0;
+    public static final double DEFENDER_LATERAL = 5.0;
 
     /** Sideways distance at which two cars no longer touch (car width plus a little), in meters. */
-    public static final double LATERAL_CLEARANCE = 2.2;
+    public static final double LATERAL_CLEARANCE = 8.6;
 
     /** Extra speed fraction for the attacker during a pass. */
     public static final double PASS_SPEED_BONUS = 0.04;
@@ -312,10 +326,10 @@ public final class Tuning {
     public static final double PIT_SPEED_LIMIT = 80.0 / 3.6;
 
     /** Sideways distance from the track centerline to the pit lane, in meters. Drawing choice. */
-    public static final double PIT_LANE_OFFSET = 13.0;
+    public static final double PIT_LANE_OFFSET = 42.0;
 
     /** Sideways speed when moving into or out of the pit lane, in m/s. */
-    public static final double PIT_LATERAL_SPEED = 5.0;
+    public static final double PIT_LATERAL_SPEED = 20.0;
 
     /** Extra seconds of room a car leaving the pits keeps when judging whether it can merge. */
     public static final double MERGE_MARGIN_SECONDS = 0.5;
@@ -426,7 +440,7 @@ public final class Tuning {
     public static final double SC_BUNCH_GAP = 60.0;
 
     /** How far off the track a retired car parks, in meters from the centerline. */
-    public static final double OFF_TRACK_OFFSET = 13.0;
+    public static final double OFF_TRACK_OFFSET = 36.0;
 
     /** Computer drivers on slicks fit Wets (not Intermediates) above this wetness. */
     public static final double AI_WET_WETNESS = 0.7;
@@ -438,7 +452,7 @@ public final class Tuning {
     public static final double RADIO_CHECK_SECONDS = 0.5;
 
     /** Seconds before the engineer repeats a topic. */
-    public static final double RADIO_TOPIC_COOLDOWN = 25.0;
+    public static final double RADIO_TOPIC_COOLDOWN = 60.0;
 
     /** Degrees outside the tire window before the engineer mentions it. */
     public static final double RADIO_TEMP_MARGIN = 5.0;
@@ -462,31 +476,104 @@ public final class Tuning {
     public static final double SKIP_TO_RESULTS_SECONDS = 600.0;
 
     /** Closest the racing line comes to the track edge, in meters (half a car plus a little). */
-    public static final double RACING_LINE_EDGE_MARGIN = 1.2;
+    public static final double RACING_LINE_EDGE_MARGIN = 4.5;
 
-    /** Smoothing passes used to find the racing line. More passes give longer, rounder sweeps. */
-    public static final int RACING_LINE_PASSES = 3000;
+    /** Smoothing passes at each stride when finding the racing line. */
+    public static final int RACING_LINE_PASSES = 300;
+
+    /**
+     * First (widest) sample stride of the racing line search. The search smooths every 32nd point
+     * first, then every 16th, and so on down to every point, so long sweeps settle quickly and the
+     * line uses the whole width of the track (wide on entry, apex, wide on exit).
+     */
+    public static final int RACING_LINE_COARSEST_STRIDE = 32;
 
     /** A car within this sideways distance of the racing line locks onto it, in meters. */
-    public static final double LINE_LOCK_TOLERANCE = 0.15;
+    public static final double LINE_LOCK_TOLERANCE = 0.6;
 
     /** Seconds to wait before retrying an incident whose car was busy. */
     public static final double INCIDENT_RETRY_SECONDS = 2.0;
 
+    /** Shortest flat-out straight that gets a DRS zone, in meters. Balance choice. */
+    public static final double DRS_MIN_STRAIGHT = 400.0;
+
+    /** How far into a straight its DRS zone starts, in meters. */
+    public static final double DRS_START_AFTER = 60.0;
+
+    /** How far before a DRS zone its detection point is, in meters. */
+    public static final double DRS_DETECTION_BEFORE = 250.0;
+
+    /** A car less than this many seconds behind another at a detection point may use DRS (the real rule). */
+    public static final double DRS_GAP_SECONDS = 1.0;
+
+    /** Extra top speed with the DRS flap open, as a fraction. Balance choice (real DRS is worth about 10 to 15 km/h). */
+    public static final double DRS_SPEED_BOOST = 0.04;
+
+    /** First race lap on which DRS is allowed (the real rule: from the second lap). */
+    public static final int DRS_FIRST_LAP = 2;
+
+    /** DRS is switched off when the average track wetness is above this. */
+    public static final double DRS_MAX_WETNESS = 0.2;
+
+    /** Shortest time between any two engineer messages, in race seconds. */
+    public static final double RADIO_MIN_GAP_SECONDS = 12.0;
+
+    /** Computer cars move each planned stop up to this many laps earlier or later, at random. */
+    public static final int AI_STOP_LAP_SPREAD = 1;
+
+    /** Distance between neighbouring teams' pit boxes along the pit lane, in meters. */
+    public static final double PIT_BOX_SPACING = 22.0;
+
+    /** Middle of the row of pit boxes, in meters after the start/finish line. Leaves room to steer in after the pit entry. */
+    public static final double PIT_BOXES_CENTER = 20.0;
+
+    /** How far a car pulls sideways out of the fast lane into its box, in meters. */
+    public static final double PIT_BOX_SHIFT = 12.0;
+
+    /** How far before its box a car starts turning in, in meters. */
+    public static final double PIT_BOX_TURN_IN = 60.0;
+
+    /** A corner whose braking starts less than this many meters after the last apex is part of the same corner. */
+    public static final double CORNER_MERGE_METERS = 50.0;
+
+    /** Seconds a car leaving the pits waits for a safe gap before it squeezes into any space. */
+    public static final double MERGE_PATIENCE_SECONDS = 4.0;
+
+    /** Slack on the minimum gap when rejoining, so a car exactly one gap behind another still counts as clear, in meters. */
+    public static final double MERGE_GAP_TOLERANCE = 1.0;
+
+    /**
+     * A car that has lost a side-by-side fight (passed, or an attacker backing out) runs at least this
+     * much slower than its rival until it is clear behind, in m/s, so no pass stays side by side for long.
+     */
+    public static final double PASS_YIELD_SPEED = 5.0;
+
+    /** Steepest sideways movement per meter driven (about 17 degrees), so cars steer instead of sliding. */
+    public static final double MAX_LATERAL_RATE = 0.3;
+
+    /** Sideways gap that counts as alongside for two cars in the pit lane, in meters (still wider than a car). */
+    public static final double PIT_LATERAL_CLEARANCE = 7.6;
+
+    /** Steepest sideways movement per meter in the pit lane, whose entry and exit roads turn off sharply. */
+    public static final double PIT_MAX_LATERAL_RATE = 0.7;
+
+    /** Sideways speed a nearly stopped car may still creep at (to park or leave a pit box), in m/s. */
+    public static final double CREEP_LATERAL_SPEED = 1.5;
+
     /** How far ahead, in meters, the car drawing looks to work out which way it points. */
-    public static final double HEADING_PROBE_METERS = 3.0;
+    public static final double HEADING_PROBE_METERS = 6.0;
 
     /** Speed fraction a failed attacker gives up while dropping back behind the defender. */
     public static final double ABORT_SLOWDOWN = 0.12;
 
     /** How far an attacker pulls out of the slipstream, in meters from the centerline. */
-    public static final double PULL_OUT_LATERAL = 3.4;
+    public static final double PULL_OUT_LATERAL = 15.0;
 
     /** How far a covering defender moves toward the inside, in meters from the centerline. */
-    public static final double COVER_LATERAL = 2.6;
+    public static final double COVER_LATERAL = 12.0;
 
     /** Sideways speed of a defender moving across to cover, in m/s. */
-    public static final double COVER_SPEED = 3.0;
+    public static final double COVER_SPEED = 11.0;
 
     /** Pass score added per unit of overlap (from -1, a gap behind, to +1, a gap ahead). Balance choice. */
     public static final double PASS_OVERLAP_WEIGHT = 1.5;
@@ -515,8 +602,6 @@ public final class Tuning {
     /** An attacker pulls out at the latest this long before the braking point, in seconds. */
     public static final double PULL_OUT_BEFORE_BRAKING_SECONDS = 1.2;
 
-    /** Extra ERS speed boost in overtake mode (2026 rule for a car within a second). Balance choice. */
-    public static final double OVERTAKE_MODE_BOOST = 0.04;
 
     /** Largest swing of a car's form (its pace from moment to moment) above or below its race pace. */
     public static final double FORM_RANGE = 0.008;

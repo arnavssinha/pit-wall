@@ -39,7 +39,28 @@ public final class PitStrategyPlanner {
             wanted = StrategyPreset.TWO_STOP;
         }
         StrategyPreset chosen = allowed.contains(wanted) ? wanted : allowed.get(0);
-        return chosen.makePlan(laps);
+        return spreadStops(chosen.makePlan(laps), random, laps);
+    }
+
+    /**
+     * Moves each planned stop a lap or so earlier or later at random, so the computer cars do not
+     * all dive into the pits on the same lap. Stops stay in order and before the last lap.
+     *
+     * @param plan the preset plan
+     * @param random the race's random source
+     * @param laps race length in laps
+     * @return a new plan with the same tires and shifted stop laps
+     */
+    private static PitPlan spreadStops(PitPlan plan, Random random, int laps) {
+        PitPlan spread = new PitPlan(plan.getStartCompound());
+        int earliest = 1;
+        for (PitStop stop : plan.getStops()) {
+            int shift = random.nextInt(2 * Tuning.AI_STOP_LAP_SPREAD + 1) - Tuning.AI_STOP_LAP_SPREAD;
+            int lap = Math.max(earliest, Math.min(laps - 1, stop.getLap() + shift));
+            spread.addStop(new PitStop(lap, stop.getCompound()));
+            earliest = lap + 1;
+        }
+        return spread;
     }
 
     /**

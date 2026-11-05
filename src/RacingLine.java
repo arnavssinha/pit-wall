@@ -37,19 +37,21 @@ public final class RacingLine {
             px[i] = x[i];
             py[i] = y[i];
         }
-        for (int pass = 0; pass < Tuning.RACING_LINE_PASSES; pass++) {
-            for (int i = 0; i < n; i++) {
-                int a = Math.floorMod(i - 2, n);
-                int b = Math.floorMod(i - 1, n);
-                int c = (i + 1) % n;
-                int d = (i + 2) % n;
-                double tx = (-px[a] + 4 * px[b] + 4 * px[c] - px[d]) / 6.0;
-                double ty = (-py[a] + 4 * py[b] + 4 * py[c] - py[d]) / 6.0;
-                double o = (tx - x[i]) * nx[i] + (ty - y[i]) * ny[i];
-                o = Math.max(-limit, Math.min(limit, o));
-                offset[i] = o;
-                px[i] = x[i] + nx[i] * o;
-                py[i] = y[i] + ny[i] * o;
+        for (int stride = Tuning.RACING_LINE_COARSEST_STRIDE; stride >= 1; stride /= 2) {
+            for (int pass = 0; pass < Tuning.RACING_LINE_PASSES; pass++) {
+                for (int i = 0; i < n; i++) {
+                    int a = Math.floorMod(i - 2 * stride, n);
+                    int b = Math.floorMod(i - stride, n);
+                    int c = (i + stride) % n;
+                    int d = (i + 2 * stride) % n;
+                    double tx = (-px[a] + 4 * px[b] + 4 * px[c] - px[d]) / 6.0;
+                    double ty = (-py[a] + 4 * py[b] + 4 * py[c] - py[d]) / 6.0;
+                    double o = (tx - x[i]) * nx[i] + (ty - y[i]) * ny[i];
+                    o = Math.max(-limit, Math.min(limit, o));
+                    offset[i] = o;
+                    px[i] = x[i] + nx[i] * o;
+                    py[i] = y[i] + ny[i] * o;
+                }
             }
         }
         curvature = lineCurvature(px, py, spacing);

@@ -54,14 +54,20 @@ you make the strategy calls.
    is close before a braking zone, time slows and you choose: dive down the Inside (A), go around the
    Outside (O), Defend by covering the inside (S) or Hold (D). Attackers pull out of the slipstream,
    defenders move across, and cars can draw alongside and pass on the straight. ERS (X) gives a clear
-   boost (blue exhaust); within a second of the car ahead you also get overtake mode.
+   boost (blue exhaust).
+   **DRS:** from lap 2, if you are less than a second behind the car ahead at a detection point, your
+   rear wing opens (it turns green) on the next long straight for extra speed. The gauge panel shows
+   "DRS ready" and "DRS OPEN". It is off in the rain and behind the safety car.
+   **Push levels matter:** Push is about 2% faster but wears tires about twice as fast and runs them
+   hotter; Conserve is about 2.5% slower but saves nearly half the wear.
    A red triangle over a rival means they are about to attack you.
 3. **Weather and incidents.** The setup screen shows a forecast (press V for different weather). Rain
    wets the track gradually and some corners dry before others; slicks fall off a cliff on a wet track.
    A car stopping on track brings out the safety car: no overtaking, the field bunches up, and a pit stop
    costs less time. Cars can also retire with mechanical failures. Your engineer warns you on the radio.
 4. **Pit stops.** Your plan calls its stops automatically (the radio tells you). Press B to cancel or to
-   box early, N to box next lap, and 1-5 to change the tires. In a dry race you must use two different
+   box early, N to box next lap, and 1-5 to change the tires. Each team has its own box along the pit
+   lane; cars pull into their box so others can drive past, and teammates queue (a "double stack"). In a dry race you must use two different
    dry compounds or you are disqualified.
 
 5. **Results.** After the flag (or press Enter once you have finished) you get the classification, your

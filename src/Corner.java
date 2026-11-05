@@ -4,8 +4,9 @@ import java.util.List;
 /**
  * A corner with a braking zone, where battles happen.
  * Corners are found from the track itself: a run of bending samples is a corner, its apex is the
- * sharpest sample, and its braking point is where the speed profile starts to fall before it.
- * Only corners where cars brake noticeably count, because overtakes happen under braking.
+ * slowest point of the racing line through it, and its braking point is where the speed profile starts to fall before it.
+ * Only corners where cars brake noticeably count, because overtakes happen under braking, and the
+ * second half of a chicane (braking again right after the first apex) belongs to the first corner.
  */
 public final class Corner {
 
@@ -67,7 +68,7 @@ public final class Corner {
             }
             int apexIndex = i;
             while (i < end && isBend(track, i)) {
-                if (Math.abs(track.getSample(i).getCurvature()) > Math.abs(track.getSample(apexIndex).getCurvature())) {
+                if (speedAtSample(track, profile, i) < speedAtSample(track, profile, apexIndex)) {
                     apexIndex = i;
                 }
                 i++;
@@ -77,11 +78,14 @@ public final class Corner {
                 brake--;
             }
             double drop = speedAtSample(track, profile, brake) - speedAtSample(track, profile, apexIndex);
-            if (drop >= Tuning.CORNER_MIN_SPEED_DROP) {
+            double brakeDistance = track.getSample(brake).getDistance();
+            boolean sameComplex = !corners.isEmpty() && track.wrap(brakeDistance
+                    - corners.get(corners.size() - 1).getApex()) < Tuning.CORNER_MERGE_METERS;
+            if (drop >= Tuning.CORNER_MIN_SPEED_DROP && !sameComplex) {
                 double difficulty = Math.max(0, Math.min(1, 1.0 - drop / Tuning.CORNER_EASY_SPEED_DROP));
                 TrackSample apex = track.getSample(apexIndex);
                 corners.add(new Corner(corners.size() + 1, track.getSample(brake).getDistance(),
-                        apex.getDistance(), apex.getCurvature(), difficulty));
+                        apex.getDistance(), track.getLineCurvature(apexIndex), difficulty));
             }
         }
         return corners;

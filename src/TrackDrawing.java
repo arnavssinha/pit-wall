@@ -1,8 +1,8 @@
 /**
  * Converts track positions (meters) into drawing units for the screen.
- * The drawing is deliberately not to scale: the layout is shrunk while the track width and the
- * cars are drawn much larger, so the screen shows more track and bigger cars and less empty grass.
- * The simulation still works in real meters; only the picture is stylized.
+ * The same scale is used along and across the track, so a car turning or moving sideways is drawn
+ * at its true angle. (The game world itself is stylized, with a wide track and large cars; see
+ * Tuning.TRACK_WIDTH.)
  * Drawing units are later turned into pixels by the camera zoom, with y flipped so north is up.
  */
 public final class TrackDrawing {
@@ -10,17 +10,17 @@ public final class TrackDrawing {
     /** Layout shrink factor: one meter along the track becomes this many drawing units. Style choice. */
     public static final double LAYOUT_SCALE = 0.5;
 
-    /** Drawn track width in drawing units (the real width is Tuning.TRACK_WIDTH meters). Style choice. */
-    public static final double TRACK_WIDTH = 32.0;
+    /** Drawn track width in drawing units. */
+    public static final double TRACK_WIDTH = Tuning.TRACK_WIDTH * LAYOUT_SCALE;
 
-    /** Drawn car length in drawing units. Style choice; Tuning.MIN_SEPARATION keeps cars from overlapping. */
-    public static final double CAR_LENGTH = 10.0;
+    /** Drawn car length in drawing units. Tuning.MIN_SEPARATION keeps cars from overlapping. */
+    public static final double CAR_LENGTH = Tuning.CAR_LENGTH * LAYOUT_SCALE;
 
-    /** Drawn car width in drawing units. Style choice. */
-    public static final double CAR_WIDTH = 3.6;
+    /** Drawn car width in drawing units. */
+    public static final double CAR_WIDTH = Tuning.CAR_WIDTH * LAYOUT_SCALE;
 
-    /** Sideways stretch so a lateral offset in meters lands in the right place on the wider drawn track. */
-    private static final double LATERAL_SCALE = TRACK_WIDTH / Tuning.TRACK_WIDTH;
+    /** Sideways scale: the same as along the track, so nothing is stretched. */
+    private static final double LATERAL_SCALE = LAYOUT_SCALE;
 
     /** The track being drawn. */
     private final Track track;
@@ -44,7 +44,7 @@ public final class TrackDrawing {
     }
 
     /**
-     * Converts a sideways offset in meters to drawing units, on the widened drawn track.
+     * Converts a sideways offset in meters to drawing units.
      *
      * @param meters sideways offset in meters
      * @return the same offset in drawing units

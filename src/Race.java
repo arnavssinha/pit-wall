@@ -13,6 +13,9 @@ import java.util.Random;
  */
 public final class Race {
 
+    /** Extra sideways room added when pushing a car back beside another, in meters, so rounding never leaves them touching. */
+    private static final double NUDGE_MARGIN = 0.05;
+
     /** The race settings. */
     private final RaceConfig config;
 
@@ -21,6 +24,12 @@ public final class Race {
 
     /** Target speeds around the lap for every grip level. */
     private final ProfileSet profiles;
+
+    /** The DRS zones. */
+    private final DrsZones drsZones;
+
+    /** True once the "DRS enabled" message has been sent while DRS is allowed. */
+    private boolean drsAnnounced;
 
     /** Current weather on track. */
     private TrackConditions conditions;
@@ -124,11 +133,11 @@ public final class Race {
         this.track = track;
         this.random = new Random(config.getSeed());
         this.profiles = new ProfileSet(track, LapCalibrator.gripScaleFor(track));
+        this.drsZones = new DrsZones(track, profiles);
         this.conditions = new TrackConditions(track, Tuning.NEUTRAL_TRACK_TEMP, Tuning.NEUTRAL_AIR_TEMP, random);
         this.engineer = new RadioEngineer(this);
         this.corners = Corner.findAll(track, profiles.forCarGrip(Compound.MEDIUM.getDryGrip()));
         this.battles = new BattleManager(this, random);
-        this.pitLane = new PitLane(this, random);
 
         ArrayList<Driver> field = new ArrayList<Driver>(roster);
         Collections.shuffle(field, random);
@@ -154,6 +163,7 @@ public final class Race {
             }
         }
         playerCar = player;
+        this.pitLane = new PitLane(this, random);
         roadOrder.addAll(cars);
         roadIndex = new int[cars.size()];
         refreshRoadOrder();
@@ -231,6 +241,7 @@ public final class Race {
             Car car = cars.get(i);
             double before = car.getDistance() - moves[i];
             pitLane.afterMove(car, before, before + moves[i], dt);
+            updateDrs(car, before, moves[i]);
             car.updateSystems(dt, moves[i], track, profiles, conditions, wantsDeploy(car));
             recordCrossings(car, before, moves[i], dt);
         }
@@ -255,7 +266,8 @@ public final class Race {
      * Stops cars from sliding sideways into a car they are running alongside. Only the nearest cars
      * on the road can overlap, so each car checks a few neighbours either side in the road order.
      * For every pair that overlaps lengthwise and was clear sideways before this step, a car that moved too close is
-     * pushed back so the gap stays at least Tuning.LATERAL_CLEARANCE, on the side it was on.
+     * pushed back so the gap stays at least the clearance they need, on the side it was on.
+     * A car parked in its box and another team's car are left alone: the parked car is out of the way.
      *
      * @param lateralBefore each car's sideways position before this step, by car id
      */
@@ -266,18 +278,19 @@ public final class Race {
             int index = roadIndex[car.getId()];
             for (int k = -reach; k <= reach; k++) {
                 Car other = roadOrder.get(Math.floorMod(index + k, n));
-                if (other == car || car.isRetired() || other.isRetired()) {
+                if (other == car || car.isRetired() || other.isRetired() || parkedApart(car, other)) {
                     continue;
                 }
                 boolean overlapping = trackGap(car, other) < Tuning.MIN_SEPARATION
                         || trackGap(other, car) < Tuning.MIN_SEPARATION;
+                double needed = clearanceBetween(car, other);
                 double wasApart = lateralBefore[car.getId()] - lateralBefore[other.getId()];
-                if (!overlapping || Math.abs(wasApart) < Tuning.LATERAL_CLEARANCE) {
+                if (!overlapping || Math.abs(wasApart) < needed) {
                     continue;
                 }
                 double apart = car.getLateralOffset() - other.getLateralOffset();
-                if (Math.abs(apart) < Tuning.LATERAL_CLEARANCE || Math.signum(apart) != Math.signum(wasApart)) {
-                    car.nudgeLateral(other.getLateralOffset() + Math.signum(wasApart) * Tuning.LATERAL_CLEARANCE);
+                if (Math.abs(apart) < needed || Math.signum(apart) != Math.signum(wasApart)) {
+                    car.nudgeLateral(other.getLateralOffset() + Math.signum(wasApart) * (needed + NUDGE_MARGIN));
                 }
             }
         }
@@ -437,6 +450,15 @@ public final class Race {
     }
 
     /**
+     * Returns the pit lane.
+     *
+     * @return the pit lane
+     */
+    public PitLane getPitLane() {
+        return pitLane;
+    }
+
+    /**
      * Returns the safety car.
      *
      * @return the safety car
@@ -466,9 +488,13 @@ public final class Race {
         if (partner != null && car.isPassGranted()) {
             target = Math.max(target * (1 + Tuning.PASS_SPEED_BONUS), partner.getSpeed() + Tuning.PASS_MIN_CLOSING);
         } else if (partner != null && car.isPassAborting()) {
-            target *= 1 - Tuning.ABORT_SLOWDOWN;
+            target = Math.min(target * (1 - Tuning.ABORT_SLOWDOWN), partner.getSpeed() - Tuning.PASS_YIELD_SPEED);
         } else if (partner != null && !car.isPassAttacker() && partner.isPassGranted()) {
-            target *= 1 - Tuning.PASS_DEFENDER_SLOW;
+            target = Math.min(target * (1 - Tuning.PASS_DEFENDER_SLOW), partner.getSpeed() - Tuning.PASS_YIELD_SPEED);
+        }
+        target = Math.max(0, target);
+        if (car.getPitPhase() == PitPhase.MERGING && hasCarAlongside(car, true)) {
+            target *= 1 - Tuning.ABORT_SLOWDOWN;
         }
         double tow = slipstreamFactor(gap, car.getSpeed(), onStraight(car));
         if (partner != null && car.isPassAttacker() && !car.isPassAborting()) {
@@ -488,9 +514,6 @@ public final class Race {
                 target = Math.min(target, ahead.getSpeed());
             }
         }
-        boolean chasing = (partner != null && car.isPassAttacker() && !car.isPassAborting())
-                || (ahead != null && gap / Math.max(1, car.getSpeed()) < Tuning.SLIPSTREAM_GAP_SECONDS);
-        car.getErs().setOvertakeMode(chasing && !safetyCar.isActive());
         car.approachSpeed(target, profiles.getGripScale(), dt);
         double move = car.getSpeed() * dt;
         double room = gap - Tuning.MIN_SEPARATION;
@@ -499,6 +522,87 @@ public final class Race {
             car.capSpeed(ahead.getSpeed());
         }
         return move;
+    }
+
+    /**
+     * Opens and closes a car's DRS. Crossing a detection point less than Tuning.DRS_GAP_SECONDS behind
+     * the car ahead earns DRS for that zone; the flap is open while the car is in the zone and shuts
+     * at its end. DRS is off on the first lap, under the safety car and on a wet track.
+     *
+     * @param car the car
+     * @param before distance before this step
+     * @param meters distance driven this step
+     */
+    private void updateDrs(Car car, double before, double meters) {
+        boolean allowed = isDrsAllowed();
+        if (allowed != drsAnnounced) {
+            drsAnnounced = allowed;
+            addMessage(allowed ? "DRS enabled." : "DRS disabled.", false);
+        }
+        if (!allowed || car.isInPitLane() || car.isRetired() || car.isFinished()) {
+            car.setDrs(-1, false);
+            return;
+        }
+        int zone = car.getDrsZone();
+        int crossed = drsZones.detectionCrossed(before, meters);
+        if (crossed >= 0) {
+            Car ahead = carAheadOnTrack(car);
+            boolean close = ahead != null
+                    && trackGap(car, ahead) / Math.max(1, car.getSpeed()) < Tuning.DRS_GAP_SECONDS;
+            zone = close ? crossed : -1;
+        }
+        boolean inZone = zone >= 0 && drsZones.zoneAt(car.getDistance()) == zone;
+        if (car.isDrsOpen() && !inZone) {
+            zone = -1;
+        }
+        car.setDrs(zone, inZone);
+    }
+
+    /**
+     * Returns whether DRS may be used right now.
+     *
+     * @return true from the second lap on, on a dry track, with no safety car
+     */
+    public boolean isDrsAllowed() {
+        Car first = standings.get(0);
+        return first.getLapsCompleted() >= Tuning.DRS_FIRST_LAP - 1 && !safetyCar.isActive()
+                && conditions.averageWetness() < Tuning.DRS_MAX_WETNESS && drsZones.size() > 0;
+    }
+
+    /**
+     * Returns the DRS zones.
+     *
+     * @return the zones
+     */
+    public DrsZones getDrsZones() {
+        return drsZones;
+    }
+
+    /**
+     * Returns whether a car on the track is level with this one (overlapping lengthwise). A car
+     * rejoining from the pits uses this to lift and slot in behind instead of running alongside
+     * forever, and only counts as back in the race once nobody overlaps it.
+     *
+     * @param car the car
+     * @param aheadOnly true to count only cars level or ahead (the ones this car should drop behind)
+     * @return true if a car on track or rejoining (not in the pit lane itself, not retired) overlaps it
+     */
+    public boolean hasCarAlongside(Car car, boolean aheadOnly) {
+        int n = roadOrder.size();
+        int index = roadIndex[car.getId()];
+        int reach = Math.min(Tuning.SIDE_BY_SIDE_NEIGHBOURS, n - 1);
+        for (int k = -reach; k <= reach; k++) {
+            Car other = roadOrder.get(Math.floorMod(index + k, n));
+            boolean inLane = other.isInPitLane() && other.getPitPhase() != PitPhase.MERGING;
+            if (other == car || inLane || other.isRetired()) {
+                continue;
+            }
+            boolean levelOrAhead = trackGap(car, other) < Tuning.MIN_SEPARATION;
+            if (levelOrAhead || (!aheadOnly && trackGap(other, car) < Tuning.MIN_SEPARATION)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -559,8 +663,11 @@ public final class Race {
     /**
      * Finds the car that limits how far a car may move: the nearest car ahead on the road, except a
      * car that is far enough to the side to be alongside safely, which is allowed only for a passing
-     * partner, for one car off the racing line (pit lane or retired) next to one on it, and for any
-     * car next to a retired car parked at the side.
+     * partner, for one car off the racing line (pit lane or retired) next to one on it, for any
+     * car next to a retired car parked at the side, and for two cars in the pit lane (one parked in
+     * its box while the other drives past), and for a car that has finished next to one still racing
+     * or for two finished cars (a pass cannot carry on over the finish line). A car parked in its pit
+     * box never blocks another team's car at all.
      *
      * @param car the car
      * @return the blocking car, or null
@@ -570,8 +677,12 @@ public final class Race {
         int start = roadIndex[car.getId()];
         for (int k = 1; k < n; k++) {
             Car other = roadOrder.get((start + k) % n);
+            if (parkedApart(car, other)) {
+                continue;
+            }
             boolean mayBeAlongside = other == car.getPassPartner() || car.isOffTrack() != other.isOffTrack()
-                    || car.isRetired() || other.isRetired();
+                    || car.isRetired() || other.isRetired() || (car.isInPitLane() && other.isInPitLane())
+                    || car.isFinished() || other.isFinished();
             if (!(mayBeAlongside && sideBySide(car, other))) {
                 return other;
             }
@@ -580,14 +691,40 @@ public final class Race {
     }
 
     /**
+     * Returns whether one of two cars is parked in its pit box while the other belongs to a different
+     * team. A parked car sits beside the fast lane, out of everyone's way, so it never blocks another
+     * team's car; a teammate arriving for a double stack still queues behind it.
+     *
+     * @param a one car
+     * @param b the other car
+     * @return true if they can never block each other
+     */
+    private static boolean parkedApart(Car a, Car b) {
+        boolean parked = a.getPitPhase() == PitPhase.STOPPED || b.getPitPhase() == PitPhase.STOPPED;
+        return parked && a.isInPitLane() && b.isInPitLane() && a.getDriver().getTeam() != b.getDriver().getTeam();
+    }
+
+    /**
      * Returns whether two cars are far enough apart sideways to be alongside without touching.
      *
      * @param a one car
      * @param b the other car
-     * @return true if their sideways gap is at least Tuning.LATERAL_CLEARANCE
+     * @return true if their sideways gap is at least Tuning.LATERAL_CLEARANCE (Tuning.PIT_LATERAL_CLEARANCE
+     *         for two cars in the pit lane, which drive slowly and park in their boxes)
      */
     public static boolean sideBySide(Car a, Car b) {
-        return Math.abs(a.getLateralOffset() - b.getLateralOffset()) >= Tuning.LATERAL_CLEARANCE;
+        return Math.abs(a.getLateralOffset() - b.getLateralOffset()) >= clearanceBetween(a, b);
+    }
+
+    /**
+     * Returns the sideways gap two cars need to run alongside each other.
+     *
+     * @param a one car
+     * @param b the other car
+     * @return Tuning.PIT_LATERAL_CLEARANCE if both are in the pit lane, otherwise Tuning.LATERAL_CLEARANCE
+     */
+    private static double clearanceBetween(Car a, Car b) {
+        return a.isInPitLane() && b.isInPitLane() ? Tuning.PIT_LATERAL_CLEARANCE : Tuning.LATERAL_CLEARANCE;
     }
 
     /**

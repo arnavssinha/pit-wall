@@ -11,8 +11,6 @@ public final class Ers {
     /** True if energy was spent during the last step. */
     private boolean deploying;
 
-    /** True while overtake mode (extra boost when chasing within a second) is available. */
-    private boolean overtakeMode;
 
     /**
      * Creates a battery at its starting charge.
@@ -56,27 +54,10 @@ public final class Ers {
         if (!deploying) {
             return 1.0;
         }
-        return 1.0 + Tuning.ERS_SPEED_BOOST + (overtakeMode ? Tuning.OVERTAKE_MODE_BOOST : 0);
+        return 1.0 + Tuning.ERS_SPEED_BOOST;
     }
 
-    /**
-     * Switches overtake mode on or off. Under the 2026 rules a car within a second of the car ahead
-     * may use extra electrical power; here that adds to the ERS boost while deploying.
-     *
-     * @param on true when the car is attacking within a second
-     */
-    public void setOvertakeMode(boolean on) {
-        overtakeMode = on;
-    }
 
-    /**
-     * Returns whether overtake mode is on.
-     *
-     * @return true when the extra boost is available
-     */
-    public boolean isOvertakeMode() {
-        return overtakeMode;
-    }
 
     /**
      * Returns the charge.

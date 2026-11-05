@@ -243,3 +243,53 @@ resolved only at braking zones); the owner asked for them.
 
 **Verified:** 33/33 tests (including short races), audit clean, self-test 59.5 FPS with 685 objects,
 Lab 196 races in about 20 s on 4 cores. Screenshots of setup, battles, chicanes and rain.
+
+## Feedback pass 2: one scale, organic racing line, DRS, push levels, radio, pit boxes (2026-11-06)
+
+Owner feedback: cars sometimes spin; the racing line and corners feel unnatural; overtaking feels
+weird; add DRS; make Conserve/Balanced/Push more extreme; the team radio spams; pit stops back up.
+
+**Root causes found**
+- The drawing was stretched about 5 times more across the track than along it (layout shrunk to 0.5,
+  width blown up 2.7 times). Every sideways move was exaggerated, so cars looked like they slid or spun,
+  and tight corners pinched into blobs.
+- The racing line search converged so slowly that the line never used the track width: it only cut
+  each apex by about 5 m instead of going wide, clipping the apex and running out wide again.
+- A pass could stay side by side for a minute when the passing car was stuck behind a third car, and
+  cars leaving the pits waited at the pit-lane offset for a gap that never came in traffic.
+
+**Done**
+- One scale in every direction (`TrackDrawing`). The game world is stylized instead: a 56 m wide
+  track with 20 m long cars on the real lap length; all sideways distances in `Tuning` were rescaled.
+- Corners tighter than 40 m radius are rounded off automatically when a track is built
+  (`Track.limitCurvature`), so the wide track never folds and chicanes become flowing esses.
+- Racing line: coarse-to-fine smoothing (every 32nd point, then 16th, ... then every point) so the
+  line now uses the whole width: wide on entry, apex, wide on exit.
+- Corners are found at the slowest point of the racing line, and the two halves of a chicane count as
+  one corner. Monza's Turn 1 is now its easiest place to pass, as in real life.
+- No spinning: a car can never move sideways at a steeper angle than about 17 degrees to its direction
+  of travel (`Tuning.MAX_LATERAL_RATE`), and the drawn car turns at most 12 degrees per frame.
+- DRS (`DrsZones`): zones on every flat-out straight of 400 m or more, detection point 250 m before.
+  Less than 1 s behind at detection gives +4% top speed in the zone; off on lap 1, in the wet and under
+  the safety car. The rear wing turns green when open; the gauge panel shows DRS ready / DRS OPEN.
+  It replaces overtake mode.
+- Passing: the car that loses a side-by-side fight runs at least 5 m/s slower until it is clear
+  behind; once the passing car is half a car ahead, both head back to the racing line, so the passing
+  car moves across in front. Pass score base lowered to keep about 50 to 60 passes per 12-lap race.
+- Push levels: Push +2% pace, about 2x wear, hotter tires and brakes; Conserve -2.5% pace, about 0.55x
+  wear, cooler.
+- Radio: the engineer waits at least 12 s between any two messages and 60 s before repeating a topic;
+  only your own passes, contact and battles you chose a move for are reported.
+- Pit stops: every team has its own box along the lane (22 m apart, matching the drawn garages). Cars
+  pull out of the fast lane into the box so others drive past; a teammate queues behind (double stack).
+  Computer cars move each planned stop up to a lap earlier or later at random. Leaving the pits, a car
+  runs along the track edge, then moves to the racing line when there is room (or squeezes in after 4 s),
+  lifting if a car is alongside.
+- Known simplification: in the pit lane, a car swinging into its box can briefly overlap a
+  neighbour leaving the next box (boxes are 22 m apart for 20 m cars). The strict no-overlap rule is
+  tested everywhere else. A car parked in its box never blocks another team's car.
+- Retired cars ignore any later steering order (one had been pulled back onto the track by a battle
+  and blocked the whole field).
+
+**Tests:** 34 (new: DRS zones and rules). The pit-stop test accepts a box on either side of the
+line; the compound-rule test uses a seed where the player does not retire; Monza is loaded once.

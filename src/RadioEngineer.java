@@ -5,7 +5,7 @@ import java.util.Locale;
  * The player's race engineer: watches the player's car and the weather and sends short, useful
  * radio messages (tires too hot or cold, tires going off, brakes fading, battery flat, a rival
  * closing, rain on the way). Each topic has a cooldown, kept in a HashMap of when it was last sent,
- * so the radio never spams the same warning.
+ * and the engineer waits between any two messages, so the radio never spams.
  */
 public final class RadioEngineer {
 
@@ -14,6 +14,9 @@ public final class RadioEngineer {
 
     /** Race time each topic was last sent. */
     private final HashMap<String, Double> lastSent = new HashMap<String, Double>();
+
+    /** Race time of the last message the engineer sent, on any topic. */
+    private double lastAnyMessage = -Double.MAX_VALUE;
 
     /** Race time of the last check. */
     private double lastCheck = -Double.MAX_VALUE;
@@ -58,7 +61,8 @@ public final class RadioEngineer {
         }
         if (car.isErsWanted() && car.getErs().getCharge() <= 0.01) {
             car.setErsWanted(false);
-            race.addMessage("Battery flat: deploy switched off to recharge. X to deploy again.", true);
+            race.addMessage("Battery flat: deploy off to recharge. X to deploy again.", true);
+            lastAnyMessage = race.getTime();
         }
         checkRival(car);
         checkWeather(car);
@@ -111,15 +115,19 @@ public final class RadioEngineer {
     }
 
     /**
-     * Sends a message unless the same topic was sent recently.
+     * Sends a message unless the same topic was sent recently or the engineer spoke a moment ago.
+     * The engineer only says one thing at a time, like a real race engineer who keeps the radio clear.
      *
      * @param topic short topic key
      * @param text the message
      */
     private void send(String topic, String text) {
         Double last = lastSent.get(topic);
-        if (last == null || race.getTime() - last >= Tuning.RADIO_TOPIC_COOLDOWN) {
+        boolean topicQuiet = last == null || race.getTime() - last >= Tuning.RADIO_TOPIC_COOLDOWN;
+        boolean radioQuiet = race.getTime() - lastAnyMessage >= Tuning.RADIO_MIN_GAP_SECONDS;
+        if (topicQuiet && radioQuiet) {
             lastSent.put(topic, race.getTime());
+            lastAnyMessage = race.getTime();
             race.addMessage(text, true);
         }
     }

@@ -47,7 +47,7 @@ public final class WorldView extends GCompound {
         this.drawing = drawing;
         this.zoom = 1.0;
         addGrassStripes();
-        add(TrackRaster.build(drawing, teamsOf(race)));
+        add(TrackRaster.build(drawing, race.getPitLane().getTeams()));
         addStartLineAndGrid(race.getConfig().getCarCount());
         CarSprite playerSprite = null;
         for (Car car : race.getCars()) {
@@ -63,22 +63,6 @@ public final class WorldView extends GCompound {
         for (CarSprite sprite : sprites) {
             add(sprite.getAlert());
         }
-    }
-
-    /**
-     * Lists the teams in the race once each, in grid order, for the garages.
-     *
-     * @param race the race
-     * @return the teams
-     */
-    private static List<Team> teamsOf(Race race) {
-        List<Team> teams = new ArrayList<Team>();
-        for (Car car : race.getCars()) {
-            if (!teams.contains(car.getDriver().getTeam())) {
-                teams.add(car.getDriver().getTeam());
-            }
-        }
-        return teams;
     }
 
     /**

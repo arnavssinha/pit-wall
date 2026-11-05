@@ -10,6 +10,9 @@ import java.util.HashMap;
  */
 public final class Palette {
 
+    /** Open DRS flap on a car's rear wing. */
+    public static final Color DRS = new Color(70, 235, 120);
+
     /** Grass around the track. */
     public static final Color GRASS = new Color(46, 92, 58);
 

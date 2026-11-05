@@ -67,6 +67,9 @@ public final class GaugePanel extends GCompound {
     /** ERS deploy status line. */
     private final GLabel ersLine;
 
+    /** DRS status: open, earned for the next zone, or off. */
+    private final GLabel drsLine;
+
     /** Track wetness where the car is. */
     private final GaugeBar wetGauge;
 
@@ -109,6 +112,7 @@ public final class GaugePanel extends GCompound {
         brakeTemp.setBand(Tuning.BRAKE_GOOD_LOW, Tuning.BRAKE_FADE_TEMP);
         battery = gauge("ERS", 0, 1, false, 170);
         ersLine = label("", 12, 206, Palette.SMALL, Palette.TEXT_DIM);
+        drsLine = label("", WIDTH - 66, 206, Palette.SMALL, Palette.TEXT_DIM);
         wetGauge = gauge("Wetness", 0, 1, false, 216);
         weatherLine = label("", 12, 250, Palette.SMALL, Palette.TEXT_DIM);
     }
@@ -194,8 +198,18 @@ public final class GaugePanel extends GCompound {
         Color ersColor = ers.isDeploying() ? Palette.PLAYER : Palette.ERS;
         battery.setValue(ers.getCharge(), String.format(Locale.ROOT, "%.0f%%", ers.getCharge() * 100), ersColor);
         String deploy = ers.isDeploying() ? "DEPLOYING" : "harvesting";
-        String mode = car.isPlayer() ? "   X deploy: " + (car.isErsWanted() ? "ON" : "OFF") : "";
+        String mode = car.isPlayer() ? "   X: " + (car.isErsWanted() ? "ON" : "OFF") : "";
         setText(ersLine, deploy + mode);
+        if (car.isDrsOpen()) {
+            setText(drsLine, "DRS OPEN");
+            drsLine.setColor(Palette.GOOD);
+        } else if (car.getDrsZone() >= 0) {
+            setText(drsLine, "DRS ready");
+            drsLine.setColor(Palette.GOOD);
+        } else {
+            setText(drsLine, race.isDrsAllowed() ? "DRS" : "DRS off");
+            drsLine.setColor(Palette.TEXT_DIM);
+        }
     }
 
     /**

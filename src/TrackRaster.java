@@ -44,13 +44,11 @@ public final class TrackRaster {
     private static final double PIT_WIDTH = 11.0;
 
     /** Length of the pit entry and exit ramps, in meters along the lap. */
-    private static final double PIT_RAMP = 140.0;
+    private static final double PIT_RAMP = 100.0;
 
-    /** Distance between garages along the lane, in meters. */
-    private static final double GARAGE_SPACING = 18.0;
 
     /** Garage length along the lane, in meters. */
-    private static final double GARAGE_LENGTH = 12.0;
+    private static final double GARAGE_LENGTH = 16.0;
 
     /** Garage depth away from the lane, in drawing units. */
     private static final double GARAGE_DEPTH = 8.0;
@@ -162,7 +160,7 @@ public final class TrackRaster {
      */
     public static GImage build(TrackDrawing drawing, List<Team> teams) {
         TrackRaster raster = new TrackRaster(drawing, teams);
-        String id = drawing.getTrack().getProfile().getId();
+        String id = drawing.getTrack().getProfile().getId() + ":" + teams.size();
         int[][] pixels = CACHE.get(id);
         if (pixels == null) {
             pixels = raster.paint();
@@ -306,10 +304,10 @@ public final class TrackRaster {
             return Palette.EDGE_LINE.getRGB();
         }
         if (inLane && across > PIT_WIDTH / 2 && across < PIT_WIDTH / 2 + GARAGE_DEPTH) {
-            double first = -GARAGE_SPACING * (garageColors.size() - 1) / 2.0;
+            double first = Tuning.PIT_BOXES_CENTER - Tuning.PIT_BOX_SPACING * (garageColors.size() - 1) / 2.0;
             double fromBox = Track.angleDifference(s / lap * 2 * Math.PI, 0) / (2 * Math.PI) * lap;
             for (int g = 0; g < garageColors.size(); g++) {
-                if (Math.abs(fromBox - (first + g * GARAGE_SPACING)) < GARAGE_LENGTH / 2) {
+                if (Math.abs(fromBox - (first + g * Tuning.PIT_BOX_SPACING)) < GARAGE_LENGTH / 2) {
                     return garageColors.get(g).getRGB();
                 }
             }

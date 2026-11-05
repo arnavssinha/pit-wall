@@ -20,6 +20,9 @@ public final class CarSprite {
      */
     private static final double MIN_SCREEN_LENGTH = 12;
 
+    /** Most the drawn car may rotate in one frame, in degrees, so it can never appear to spin. */
+    private static final double MAX_TURN_PER_FRAME = 12.0;
+
     /** Tire color. */
     private static final Color TIRE = new Color(22, 22, 26);
 
@@ -37,6 +40,12 @@ public final class CarSprite {
 
     /** Blue exhaust flame shown behind the car while it deploys ERS. */
     private final GPolygon glow;
+
+    /** The rear wing, which turns bright green while the DRS flap is open. */
+    private final GPolygon rearWing;
+
+    /** Whether the rear wing is currently drawn open. */
+    private boolean wingOpen;
 
     /** Red warning triangle shown above a rival that is about to attack the player. */
     private final GPolygon alert;
@@ -78,7 +87,8 @@ public final class CarSprite {
         parts.add(body);
 
         parts.add(rect(0.84 * l, 1.0 * l, -0.95 * w, 0.95 * w, team.darker()));
-        parts.add(rect(-1.0 * l, -0.86 * l, -0.78 * w, 0.78 * w, CARBON));
+        rearWing = rect(-1.0 * l, -0.86 * l, -0.78 * w, 0.78 * w, CARBON);
+        parts.add(rearWing);
         parts.add(rect(-0.80 * l, 0.80 * l, -0.06 * w, 0.06 * w, Palette.EDGE_LINE));
         parts.add(rect(-0.18 * l, 0.22 * l, -0.24 * w, 0.24 * w, CARBON));
 
@@ -225,8 +235,14 @@ public final class CarSprite {
         double heading = Math.atan2(drawing.y(d + probe, aheadLateral) - drawing.y(d, lateral),
                 drawing.x(d + probe, aheadLateral) - drawing.x(d, lateral));
         double turn = Math.toDegrees(Track.angleDifference(heading, Math.toRadians(appliedDegrees)));
+        turn = Math.max(-MAX_TURN_PER_FRAME, Math.min(MAX_TURN_PER_FRAME, turn));
         boolean rotate = Math.abs(turn) > 0.05;
 
+        if (car.isDrsOpen() != wingOpen) {
+            wingOpen = car.isDrsOpen();
+            rearWing.setFillColor(wingOpen ? Palette.DRS : CARBON);
+            rearWing.setColor(wingOpen ? Palette.DRS : CARBON);
+        }
         boolean boosting = car.getErs().isDeploying();
         if (glow.isVisible() != boosting) {
             glow.setVisible(boosting);

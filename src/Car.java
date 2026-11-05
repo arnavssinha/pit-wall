@@ -140,6 +140,12 @@ public final class Car {
     /** True if the car has retired from the race (mechanical failure or stopped on track). */
     private boolean retired;
 
+    /** DRS zone this car may open its wing in (it was close enough at the detection point), or -1. */
+    private int drsZone = -1;
+
+    /** True while the rear-wing flap is open. */
+    private boolean drsOpen;
+
     /** Number of laps completed. */
     private int lapsCompleted;
 
@@ -200,7 +206,8 @@ public final class Car {
      */
     public double targetSpeed(ProfileSet profiles, TrackConditions conditions) {
         currentGrip = tire.grip(conditions.wetnessAt(distance)) * brakes.fadeFactor();
-        double scale = paceFactor * (1 + form) * pushLevel.getPace() * ers.boost();
+        double scale = paceFactor * (1 + form) * pushLevel.getPace() * ers.boost()
+                * (drsOpen ? 1 + Tuning.DRS_SPEED_BOOST : 1);
         currentTopSpeed = Tuning.TOP_SPEED * scale;
         if (retired) {
             return 0;
@@ -210,6 +217,35 @@ public final class Car {
             target *= Tuning.PENALTY_SPEED_FRACTION;
         }
         return finished ? target * Tuning.COOL_DOWN_PACE : target;
+    }
+
+    /**
+     * Sets the car's DRS state for this step.
+     *
+     * @param zone the zone the car may use DRS in, or -1
+     * @param open true if the flap is open now
+     */
+    public void setDrs(int zone, boolean open) {
+        drsZone = zone;
+        drsOpen = open;
+    }
+
+    /**
+     * Returns the DRS zone this car has earned, or -1.
+     *
+     * @return zone index or -1
+     */
+    public int getDrsZone() {
+        return drsZone;
+    }
+
+    /**
+     * Returns whether the rear-wing flap is open.
+     *
+     * @return true while DRS is open
+     */
+    public boolean isDrsOpen() {
+        return drsOpen;
     }
 
     /**
@@ -278,7 +314,9 @@ public final class Car {
     /**
      * Moves the car sideways for one step. A car on the racing line simply rides it; a car heading
      * back to the line, or toward a target of its own (passing, covering, pit lane), moves toward it
-     * at its sideways speed.
+     * at its sideways speed, but never at a steeper angle than a car can steer (Tuning.MAX_LATERAL_RATE),
+     * so a slow car drifts across gently instead of sliding sideways. The pit entry and exit roads turn
+     * more sharply (Tuning.PIT_MAX_LATERAL_RATE).
      *
      * @param line the racing line's position here, in meters from the centerline
      * @param meters distance driven this step
@@ -290,14 +328,16 @@ public final class Car {
             lateralOffset = line;
         } else {
             double target = followLine ? line : lateralTarget;
-            double step = lateralSpeed * dt;
+            double maxRate = isInPitLane() ? Tuning.PIT_MAX_LATERAL_RATE : Tuning.MAX_LATERAL_RATE;
+            double step = Math.min(lateralSpeed * dt, maxRate * meters + Tuning.CREEP_LATERAL_SPEED * dt);
             double toGo = target - lateralOffset;
             lateralOffset = Math.abs(toGo) <= step ? target : lateralOffset + Math.signum(toGo) * step;
             if (followLine && Math.abs(lateralOffset - line) < Tuning.LINE_LOCK_TOLERANCE) {
                 onLine = true;
             }
         }
-        lateralRate = meters > 1e-6 ? (lateralOffset - before) / meters : 0;
+        double rate = meters > 1e-6 ? (lateralOffset - before) / meters : 0;
+        lateralRate = Math.max(-Tuning.MAX_LATERAL_RATE, Math.min(Tuning.MAX_LATERAL_RATE, rate));
     }
 
     /**
@@ -312,14 +352,26 @@ public final class Car {
     }
 
     /**
-     * Sends the car back to the racing line.
+     * Sends the car back to the racing line. A retired car ignores this and stays parked.
      *
      * @param speed sideways speed in meters per second
      */
     public void returnToLine(double speed) {
+        if (retired) {
+            return;
+        }
         followLine = true;
         onLine = false;
         lateralSpeed = speed;
+    }
+
+    /**
+     * Returns whether the car is heading for (or riding) the racing line rather than a target of its own.
+     *
+     * @return true when following the line
+     */
+    public boolean isFollowingLine() {
+        return followLine;
     }
 
     /**
@@ -404,11 +456,15 @@ public final class Car {
 
     /**
      * Sets where the car moves sideways and how fast.
+     * A retired car ignores this: it keeps heading for its parking spot off the track.
      *
      * @param target sideways offset in meters, positive to the left
      * @param speed sideways speed in meters per second
      */
     public void setLateralTarget(double target, double speed) {
+        if (retired) {
+            return;
+        }
         followLine = false;
         onLine = false;
         lateralTarget = target;
@@ -608,9 +664,9 @@ public final class Car {
      * @param side +1 to pull off to the left, -1 to the right
      */
     public void retire(int side) {
+        setLateralTarget(side * Tuning.OFF_TRACK_OFFSET, Tuning.PIT_LATERAL_SPEED);
         retired = true;
         pitRequest = 0;
-        setLateralTarget(side * Tuning.OFF_TRACK_OFFSET, Tuning.PIT_LATERAL_SPEED);
     }
 
     /**
