@@ -8,19 +8,26 @@
 public final class TrackDrawing {
 
     /** Layout shrink factor: one meter along the track becomes this many drawing units. Style choice. */
-    public static final double LAYOUT_SCALE = 0.65;
+    public static final double LAYOUT_SCALE = 0.5;
 
     /** Drawn track width in drawing units (the real width is Tuning.TRACK_WIDTH meters). Style choice. */
-    public static final double TRACK_WIDTH = 20.0;
+    public static final double TRACK_WIDTH = 32.0;
 
     /** Drawn car length in drawing units. Style choice; Tuning.MIN_SEPARATION keeps cars from overlapping. */
-    public static final double CAR_LENGTH = 8.0;
+    public static final double CAR_LENGTH = 10.0;
 
     /** Drawn car width in drawing units. Style choice. */
-    public static final double CAR_WIDTH = 2.9;
+    public static final double CAR_WIDTH = 3.6;
 
     /** Sideways stretch so a lateral offset in meters lands in the right place on the wider drawn track. */
     private static final double LATERAL_SCALE = TRACK_WIDTH / Tuning.TRACK_WIDTH;
+
+    /**
+     * On the inside of a bend, an edge may come no closer to the bend's center than this
+     * fraction of the drawn radius. Without the limit a wide track would fold over itself
+     * on the inside of tight corners such as the chicane.
+     */
+    private static final double INSIDE_EDGE_LIMIT = 0.8;
 
     /** The track being drawn. */
     private final Track track;
@@ -73,7 +80,8 @@ public final class TrackDrawing {
      * @return x in drawing units
      */
     public double offsetX(double distance, double drawOffset) {
-        return track.xAt(distance, 0) * LAYOUT_SCALE - drawOffset * Math.sin(track.headingAt(distance));
+        double offset = limitInside(distance, drawOffset);
+        return track.xAt(distance, 0) * LAYOUT_SCALE - offset * Math.sin(track.headingAt(distance));
     }
 
     /**
@@ -84,7 +92,28 @@ public final class TrackDrawing {
      * @return y in drawing units
      */
     public double offsetY(double distance, double drawOffset) {
-        return track.yAt(distance, 0) * LAYOUT_SCALE + drawOffset * Math.cos(track.headingAt(distance));
+        double offset = limitInside(distance, drawOffset);
+        return track.yAt(distance, 0) * LAYOUT_SCALE + offset * Math.cos(track.headingAt(distance));
+    }
+
+    /**
+     * Shortens a sideways offset that points to the inside of a tight bend, so the drawn edge
+     * stays outside the bend's center. A left bend has positive curvature and its inside is
+     * the left (positive offset); a right bend is the mirror image.
+     *
+     * @param distance distance along the lap in meters
+     * @param drawOffset sideways offset in drawing units (positive left)
+     * @return the offset, limited on the inside of tight bends
+     */
+    private double limitInside(double distance, double drawOffset) {
+        double curvature = track.getSample(track.indexAt(distance)).getCurvature();
+        boolean inside = curvature * drawOffset > 0;
+        if (!inside) {
+            return drawOffset;
+        }
+        double drawnRadius = LAYOUT_SCALE / Math.abs(curvature);
+        double limit = INSIDE_EDGE_LIMIT * drawnRadius;
+        return Math.abs(drawOffset) <= limit ? drawOffset : Math.signum(drawOffset) * limit;
     }
 
     /**

@@ -124,7 +124,7 @@ package ui <<Frame>> {
   }
   class TrackDrawing {
     -track : Track
-    {static} 5 constants
+    {static} 6 constants
     +TrackDrawing(Track)
     +getTrack() : Track
     +x(double, double) : double

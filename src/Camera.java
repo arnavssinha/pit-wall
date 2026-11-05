@@ -7,7 +7,7 @@
 public final class Camera {
 
     /** Zoom used when following a car, in pixels per drawing unit. Drawing choice. */
-    public static final double FOLLOW_ZOOM = 4.0;
+    public static final double FOLLOW_ZOOM = 3.2;
 
     /** Fraction of the remaining distance covered each frame when easing (larger is snappier). */
     private static final double EASE = 0.12;

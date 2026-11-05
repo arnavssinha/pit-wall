@@ -24,13 +24,13 @@ public final class WorldView extends GCompound {
     private static final int CHUNK_SAMPLES = 40;
 
     /** Width of a kerb strip in drawing units. */
-    private static final double KERB_WIDTH = 2.0;
+    private static final double KERB_WIDTH = 3.0;
 
     /** Width of the paved run-off beside the track, in drawing units. */
-    private static final double RUNOFF_WIDTH = 7.0;
+    private static final double RUNOFF_WIDTH = 10.0;
 
     /** Width of the gravel traps on the outside of corners, in drawing units. */
-    private static final double GRAVEL_WIDTH = 16.0;
+    private static final double GRAVEL_WIDTH = 22.0;
 
     /**
      * Samples a gravel trap may run on past the end of its corner, but only along straight track,
@@ -322,7 +322,7 @@ public final class WorldView extends GCompound {
                     + TrackDrawing.CAR_LENGTH / (2 * TrackDrawing.LAYOUT_SCALE) + 1.0;
             double lateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
             double center = lateral * TrackDrawing.TRACK_WIDTH / Tuning.TRACK_WIDTH;
-            add(band(d, 0.8, center - 2.4, center + 2.4, Palette.EDGE_LINE));
+            add(band(d, 1.2, center - 3.0, center + 3.0, Palette.EDGE_LINE));
         }
     }
 

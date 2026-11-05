@@ -65,7 +65,10 @@ are not yet checked against FastF1 data.
   has a yellow ring and helmet.
 - Scenery: paved run-off along the whole lap, gravel traps on the outside of corners, mowed-grass
   stripes, chequered start line, grid slot marks.
-- `Tuning.MIN_SEPARATION` raised to 14.5 m and grid slots to 16 m so the enlarged car drawings can never
+- `Tuning.MIN_SEPARATION` raised (now 22 m) and grid slots (now 24 m) so the enlarged car drawings can never
   overlap. A new test checks this.
 
 **Verified:** 9/9 tests, audit clean, self-test 59.5 FPS with 811 objects on the virtual display.
+- Second pass from owner feedback: layout shrunk to 50 percent, track drawn 32 units wide, cars 10 units
+  long. The inside edge of tight bends is pinched (`TrackDrawing.limitInside`) so the wide track never
+  folds over itself at the chicanes.
