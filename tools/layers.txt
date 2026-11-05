@@ -4,5 +4,31 @@
 # Layer ui may import acm.graphics, acm.program, java.awt.Color, java.awt.Font
 # and java.awt.event key and mouse events (needed for ACM keyboard and mouse input).
 # tools/audit.sh fails if a file in src/ is missing from this list.
+
 sim Tuning.java
+sim TrackProfile.java
+sim TrackSample.java
+sim Track.java
+sim CarPhysics.java
+sim SpeedProfile.java
+sim LapCalibrator.java
+sim Team.java
+sim Driver.java
+sim Car.java
+sim RaceConfig.java
+sim Race.java
+
+data DataFiles.java
+data TrackLoader.java
+data RosterLoader.java
+
 ui PitWall.java
+ui RaceScreen.java
+ui WorldView.java
+ui CarSprite.java
+ui Camera.java
+ui MiniMap.java
+ui TimingTower.java
+ui HudPanel.java
+ui DebugOverlay.java
+ui Palette.java

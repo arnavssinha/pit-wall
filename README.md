@@ -4,7 +4,8 @@ An F1 race-strategy game written in Java with the ACM graphics library.
 You are the race engineer for one driver in a 10-lap sprint. The car drives itself;
 you make the strategy calls.
 
-> Status: **M1 in progress** (first deliverable). See `DEVLOG.md` for what works today.
+> Status: **M1, first deliverable.** 22 computer-driven cars race 10 laps of Monza with a follow camera,
+> timing tower, lap counter and minimap. Strategy controls arrive in later milestones (see `DEVLOG.md`).
 
 ## Play it in three steps
 
@@ -30,13 +31,18 @@ you make the strategy calls.
 | Space | Pause or resume |
 | T | Change time speed: 1x, 2x, 4x, 8x (starts at 2x) |
 | Z | Switch between follow camera and whole-track view |
-| Tab | Follow the next car (Shift-Tab: previous). Backspace returns to your car |
+| F | Camera follows the next car down the order (Shift-F: the car ahead) |
+| G | Camera goes back to your car |
 | R | Restart with a new random race |
 | F3 | Show or hide the debug overlay (frames per second and object count) |
 
-## What is in the game so far
+## What is in the game so far (M1)
 
-See `DEVLOG.md`. Later milestones add tires, battles, pit stops, weather and the Strategy Lab.
+- A random driver from the 2026 roster is assigned to you, on a random grid slot (simulated qualifying comes in M3).
+- All 22 cars drive themselves from a standing start: they accelerate, brake before corners and corner
+  at a speed limited by grip and downforce. Cars queue behind slower cars; overtaking arrives with battles in M4.
+- Timing tower with live gaps to the leader, lap counter, race clock, minimap, follow and whole-track cameras.
+- Later milestones add tires, push levels, battles, pit stops, weather, results and the Strategy Lab.
 
 ## Where the data comes from
 

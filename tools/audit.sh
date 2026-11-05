@@ -55,8 +55,8 @@ ui_files=""
 for name in $(awk '$1 == "ui" { print $2 }' tools/layers.txt); do ui_files="$ui_files src/$name"; done
 if [ -n "$ui_files" ]; then
     # shellcheck disable=SC2086
-    bad=$(grep -hE '^import ' $ui_files | sort -u | grep -vE '^import (acm\.graphics\.[A-Za-z]+|acm\.program\.[A-Za-z]+|java\.awt\.Color|java\.awt\.Font|java\.awt\.event\.(KeyEvent|MouseEvent)|java\.util\.[A-Za-z]+);$')
-    if [ -z "$bad" ]; then pass "ui imports only ACM, Color, Font, key and mouse events and java.util"
+    bad=$(grep -hE '^import ' $ui_files | sort -u | grep -vE '^import (acm\.graphics\.[A-Za-z]+|acm\.program\.[A-Za-z]+|java\.awt\.Color|java\.awt\.Font|java\.awt\.event\.(KeyEvent|MouseEvent)|java\.util\.[A-Za-z]+|java\.io\.IOException);$')
+    if [ -z "$bad" ]; then pass "ui imports only ACM, Color, Font, key and mouse events, java.util and IOException"
     else fail "ui imports outside the allowed list"; echo "$bad" | sed 's/^/      /'; fi
 fi
 

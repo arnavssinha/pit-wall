@@ -127,7 +127,7 @@ public final class UmlDiagram {
         List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
         Pattern header = Pattern.compile("^public (?:final |abstract )*(class|enum|interface) (\\w+)"
                 + "(?:<[^>]*>)?(?: extends ([\\w.]+))?(?: implements ([\\w, <>]+))?");
-        Pattern field = Pattern.compile("^    (?:private|public|protected) (static )?(?:final )?"
+        Pattern field = Pattern.compile("^    (?:private|public|protected) (static )?(?:final )?(?:transient )?"
                 + "([\\w<>\\[\\], ]+?) (\\w+)(?: = .*)?;");
         Pattern method = Pattern.compile("^    public (?:static )?(?:final )?(?:([\\w<>\\[\\], ]+?) )?(\\w+)\\(([^)]*)\\)");
         Clazz c = null;

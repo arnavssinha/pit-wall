@@ -1,0 +1,28 @@
+# 2026 Formula 1 driver line-up (11 teams, 22 drivers).
+# Source: general knowledge of the announced 2026 entry list as of mid-2026.
+# NOT YET VERIFIED against FastF1 session results; check names, numbers and codes before M8.
+# Team colors are drawing choices that echo each livery, not official color codes.
+# No pace ratings live here: pace will be computed from FastF1 lap data in M8.
+number,code,name,team,teamColor
+1,NOR,Lando Norris,McLaren,#FF8000
+81,PIA,Oscar Piastri,McLaren,#FF8000
+16,LEC,Charles Leclerc,Ferrari,#DC0000
+44,HAM,Lewis Hamilton,Ferrari,#DC0000
+63,RUS,George Russell,Mercedes,#27F4D2
+12,ANT,Andrea Kimi Antonelli,Mercedes,#27F4D2
+3,VER,Max Verstappen,Red Bull Racing,#3671C6
+6,HAD,Isack Hadjar,Red Bull Racing,#3671C6
+14,ALO,Fernando Alonso,Aston Martin,#229971
+18,STR,Lance Stroll,Aston Martin,#229971
+10,GAS,Pierre Gasly,Alpine,#FF87BC
+43,COL,Franco Colapinto,Alpine,#FF87BC
+55,SAI,Carlos Sainz,Williams,#64C4FF
+23,ALB,Alexander Albon,Williams,#64C4FF
+30,LAW,Liam Lawson,Racing Bulls,#6692FF
+41,LIN,Arvid Lindblad,Racing Bulls,#6692FF
+31,OCO,Esteban Ocon,Haas,#B6BABD
+87,BEA,Oliver Bearman,Haas,#B6BABD
+27,HUL,Nico Hulkenberg,Audi,#F50537
+5,BOR,Gabriel Bortoleto,Audi,#F50537
+11,PER,Sergio Perez,Cadillac,#C0A062
+77,BOT,Valtteri Bottas,Cadillac,#C0A062
