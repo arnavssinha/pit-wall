@@ -141,7 +141,7 @@ public final class PitWall extends GraphicsProgram {
      */
     private void startRace(long seed) {
         removeAll();
-        currentRace = new Race(new RaceConfig(Tuning.DEFAULT_CARS, Tuning.RACE_LAPS, seed), track, roster);
+        currentRace = new Race(new RaceConfig(Tuning.DEFAULT_CARS, Tuning.RACE_LAPS, seed), track, roster, Compound.MEDIUM);
         screen = new RaceScreen(this, currentRace, getWidth(), getHeight());
     }
 

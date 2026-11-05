@@ -17,6 +17,13 @@ sim Driver.java
 sim Car.java
 sim RaceConfig.java
 sim Race.java
+sim Compound.java
+sim PushLevel.java
+sim Tire.java
+sim Brakes.java
+sim Ers.java
+sim ProfileSet.java
+sim TrackConditions.java
 
 data DataFiles.java
 data TrackLoader.java
@@ -33,3 +40,5 @@ ui HudPanel.java
 ui DebugOverlay.java
 ui Palette.java
 ui TrackDrawing.java
+ui GaugeBar.java
+ui GaugePanel.java

@@ -1,5 +1,6 @@
 import acm.graphics.GCompound;
 import acm.graphics.GLabel;
+import acm.graphics.GOval;
 import acm.graphics.GRect;
 import java.awt.Color;
 import java.util.List;
@@ -45,6 +46,12 @@ public final class TimingTower extends GCompound {
     /** Gap text per row. */
     private final GLabel[] gapLabels;
 
+    /** Tire compound circle per row. */
+    private final GOval[] tireBadges;
+
+    /** Tire compound letter per row. */
+    private final GLabel[] tireLetters;
+
     /**
      * Builds the tower with one row per car.
      *
@@ -74,6 +81,8 @@ public final class TimingTower extends GCompound {
         colorBars = new GRect[rows];
         codeLabels = new GLabel[rows];
         gapLabels = new GLabel[rows];
+        tireBadges = new GOval[rows];
+        tireLetters = new GLabel[rows];
         for (int i = 0; i < rows; i++) {
             double baseline = HEADER + i * ROW_HEIGHT + 17;
             positionLabels[i] = label(String.valueOf(i + 1), 12, baseline, Palette.TEXT_DIM);
@@ -81,7 +90,11 @@ public final class TimingTower extends GCompound {
             colorBars[i].setFilled(true);
             add(colorBars[i]);
             codeLabels[i] = label("", 52, baseline, Palette.TEXT);
-            gapLabels[i] = label("", 120, baseline, Palette.TEXT_DIM);
+            gapLabels[i] = label("", 112, baseline, Palette.TEXT_DIM);
+            tireBadges[i] = new GOval(WIDTH - 30, baseline - 13, 17, 17);
+            tireBadges[i].setFilled(true);
+            add(tireBadges[i]);
+            tireLetters[i] = label("", WIDTH - 26, baseline, Palette.CAR_OUTLINE);
         }
     }
 
@@ -112,6 +125,13 @@ public final class TimingTower extends GCompound {
             Car car = standings.get(i);
             setText(codeLabels[i], car.getDriver().getCode());
             setText(gapLabels[i], gapText(car, i));
+            Compound compound = car.getTire().getCompound();
+            setText(tireLetters[i], compound.getLetter());
+            Color tireColor = Palette.compoundColor(compound);
+            if (!tireColor.equals(tireBadges[i].getFillColor())) {
+                tireBadges[i].setFillColor(tireColor);
+                tireBadges[i].setColor(tireColor);
+            }
             Color team = Palette.teamColor(car.getDriver().getTeam());
             if (!team.equals(colorBars[i].getFillColor())) {
                 colorBars[i].setFillColor(team);

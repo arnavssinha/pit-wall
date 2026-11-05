@@ -59,6 +59,18 @@ public final class CarPhysics {
     }
 
     /**
+     * How hard the tires are working, as a load number: 1 when cruising straight, plus the
+     * cornering and braking acceleration measured in g. Tire heat and wear follow this number.
+     *
+     * @param lateral cornering acceleration in m/s squared
+     * @param braking braking deceleration in m/s squared
+     * @return load, 1 or more
+     */
+    public static double load(double lateral, double braking) {
+        return 1.0 + (lateral + braking) / Tuning.GRAVITY;
+    }
+
+    /**
      * Braking deceleration available at a speed, limited by grip (so downforce helps braking too).
      *
      * @param speed speed in m/s

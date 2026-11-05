@@ -34,6 +34,9 @@ public final class RaceScreen {
     /** HUD text. */
     private final HudPanel hud;
 
+    /** Car gauges on the right. */
+    private final GaugePanel gauges;
+
     /** F3 debug overlay. */
     private final DebugOverlay debug;
 
@@ -90,6 +93,10 @@ public final class RaceScreen {
         hud = new HudPanel(race, width, height);
         program.add(hud);
 
+        gauges = new GaugePanel();
+        gauges.setLocation(width - GaugePanel.WIDTH - 8, HudPanel.TOP_BAR_BOTTOM + 10);
+        program.add(gauges);
+
         debug = new DebugOverlay();
         debug.setLocation(width - 308, 8);
         render();
@@ -127,6 +134,7 @@ public final class RaceScreen {
         tower.update();
         miniMap.update();
         hud.update(followed, Tuning.TIME_SPEEDS[speedIndex], paused);
+        gauges.update(followed);
         hud.refreshBanner();
     }
 
@@ -174,6 +182,18 @@ public final class RaceScreen {
                 break;
             case KeyEvent.VK_R:
                 restartRequested = true;
+                break;
+            case KeyEvent.VK_Q:
+                race.getPlayerCar().setPushLevel(PushLevel.CONSERVE);
+                break;
+            case KeyEvent.VK_W:
+                race.getPlayerCar().setPushLevel(PushLevel.BALANCED);
+                break;
+            case KeyEvent.VK_E:
+                race.getPlayerCar().setPushLevel(PushLevel.PUSH);
+                break;
+            case KeyEvent.VK_X:
+                race.getPlayerCar().setErsWanted(!race.getPlayerCar().isErsWanted());
                 break;
             case KeyEvent.VK_F3:
                 toggleDebug();

@@ -125,6 +125,114 @@ public final class Tuning {
     /** Allowed calibration error as a fraction of the target lap (brief: plus or minus 3 percent). */
     public static final double CALIBRATION_TOLERANCE = 0.03;
 
+    /** Grip levels are rounded to this step when choosing a speed profile, so few profiles are built. */
+    public static final double PROFILE_GRIP_STEP = 0.004;
+
+    /** A point counts as straight when its corner limit is at least this fraction of top speed. */
+    public static final double STRAIGHT_FRACTION = 0.97;
+
+    /** Track temperature in Celsius used until weather is simulated (M6). Balance choice. */
+    public static final double NEUTRAL_TRACK_TEMP = 35.0;
+
+    /** Air temperature in Celsius used until weather is simulated (M6). Balance choice. */
+    public static final double NEUTRAL_AIR_TEMP = 25.0;
+
+    /** Share of track (versus air) temperature in the temperature tires settle toward. Balance choice. */
+    public static final double TRACK_TEMP_SHARE = 0.6;
+
+    /** Tire temperature when fitted, from tire blankets (real blankets run near 70 C). */
+    public static final double TIRE_BLANKET_TEMP = 70.0;
+
+    /**
+     * Degrees a tire runs above ambient at Balanced push under average load. Balance choice: puts a
+     * Medium in the middle of its window (about 100 C) in neutral conditions.
+     */
+    public static final double TIRE_HEAT_RISE = 63.0;
+
+    /** Time in seconds for tire temperature to close most of the gap to its target. Balance choice. */
+    public static final double TIRE_TEMP_SECONDS = 12.0;
+
+    /** How much a wet track cools slick tires at full wetness (fraction of heating removed). */
+    public static final double SLICK_WET_COOLING = 0.4;
+
+    /** Extra heating of rain tires per unit of track that is drier than they want. */
+    public static final double WET_TIRE_OVERHEAT = 1.0;
+
+    /** Degrees above the window that double the wear rate. Balance choice. */
+    public static final double OVERHEAT_WEAR_DEGREES = 30.0;
+
+    /** Degrees outside the window at which grip has fallen to MIN_TEMP_GRIP. Balance choice. */
+    public static final double TEMP_FALLOFF_DEGREES = 35.0;
+
+    /** Lowest grip factor from being out of the temperature window. */
+    public static final double MIN_TEMP_GRIP = 0.85;
+
+    /** Wear at which the grip cliff begins. */
+    public static final double WEAR_CLIFF = 0.8;
+
+    /** Grip lost between new and the start of the cliff. */
+    public static final double WEAR_GRIP_BEFORE_CLIFF = 0.04;
+
+    /** Grip lost across the cliff, from WEAR_CLIFF to end of life. */
+    public static final double WEAR_GRIP_IN_CLIFF = 0.10;
+
+    /** Grip lost per unit of wear past the end of life. */
+    public static final double WEAR_GRIP_PAST_END = 0.5;
+
+    /** Lowest grip factor from wear. */
+    public static final double MIN_WEAR_GRIP = 0.65;
+
+    /** Wetness where slicks fall off the cliff. Balance choice. */
+    public static final double SLICK_WET_CLIFF = 0.3;
+
+    /** Grip slicks lose between dry and the cliff. */
+    public static final double SLICK_DAMP_LOSS = 0.08;
+
+    /** Further grip slicks lose from the cliff to a soaked track. */
+    public static final double SLICK_CLIFF_LOSS = 0.47;
+
+    /** Grip a rain tire loses per unit of wetness away from its ideal. */
+    public static final double WET_TIRE_MISMATCH_LOSS = 0.25;
+
+    /** Brake temperature at the start, in Celsius. */
+    public static final double BRAKE_START_TEMP = 300.0;
+
+    /** Degrees per second gained per unit of braking power (deceleration times speed). Balance choice. */
+    public static final double BRAKE_HEATING = 0.22;
+
+    /** Base fraction of the gap to air temperature lost per second. Balance choice. */
+    public static final double BRAKE_COOLING_BASE = 0.03;
+
+    /** Extra cooling fraction per second for each m/s of speed. Balance choice. */
+    public static final double BRAKE_COOLING_PER_SPEED = 0.0016;
+
+    /** Brake temperature where fade starts, in Celsius. Carbon brakes work up to about 1000 C. */
+    public static final double BRAKE_FADE_TEMP = 1000.0;
+
+    /** Degrees above the fade temperature where fade reaches its maximum. */
+    public static final double BRAKE_FADE_SPAN = 300.0;
+
+    /** Most stopping grip that fade can remove. */
+    public static final double BRAKE_MAX_FADE = 0.08;
+
+    /** Bottom of the brakes' good working range, for the gauge. */
+    public static final double BRAKE_GOOD_LOW = 400.0;
+
+    /** Battery charge at the start. */
+    public static final double ERS_START_CHARGE = 0.9;
+
+    /** Charge gained per second of 1 g braking. Balance choice: about a quarter battery per lap. */
+    public static final double ERS_HARVEST_PER_G_SECOND = 0.012;
+
+    /** Charge spent per second of deploying: a full battery lasts 20 s. Balance choice. */
+    public static final double ERS_DEPLOY_PER_SECOND = 0.05;
+
+    /** Speed gain while deploying, as a fraction. Balance choice. */
+    public static final double ERS_SPEED_BOOST = 0.03;
+
+    /** Computer drivers deploy on straights while the battery is above this. Balance choice. */
+    public static final double AI_ERS_DEPLOY_ABOVE = 0.45;
+
     /**
      * Creates nothing; this class only holds constants.
      */

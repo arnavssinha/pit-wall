@@ -56,6 +56,24 @@ public final class Palette {
     /** Minimap track line. */
     public static final Color MINIMAP_TRACK = new Color(200, 205, 215);
 
+    /** Gauge background. */
+    public static final Color GAUGE_BACK = new Color(40, 46, 60);
+
+    /** Green band marking a gauge's ideal range. */
+    public static final Color GAUGE_BAND = new Color(52, 140, 82);
+
+    /** Gauge fill when all is well. */
+    public static final Color GOOD = new Color(92, 200, 120);
+
+    /** Gauge fill or text for a warning. */
+    public static final Color WARNING = new Color(250, 170, 60);
+
+    /** Gauge fill or text for danger. */
+    public static final Color DANGER = new Color(235, 70, 70);
+
+    /** ERS battery fill. */
+    public static final Color ERS = new Color(90, 170, 250);
+
     /** Large headline font. */
     public static final Font HEADLINE = new Font("SansSerif", Font.BOLD, 26);
 
@@ -75,6 +93,28 @@ public final class Palette {
      * Not instantiated; this class only holds constants.
      */
     private Palette() {
+    }
+
+    /**
+     * Returns the traditional color for a tire compound: red Soft, yellow Medium, white Hard,
+     * green Intermediate, blue Wet.
+     *
+     * @param compound the compound
+     * @return its color
+     */
+    public static Color compoundColor(Compound compound) {
+        switch (compound) {
+            case SOFT:
+                return new Color(230, 50, 50);
+            case MEDIUM:
+                return new Color(250, 210, 50);
+            case HARD:
+                return new Color(240, 240, 240);
+            case INTERMEDIATE:
+                return new Color(60, 190, 80);
+            default:
+                return new Color(50, 120, 230);
+        }
     }
 
     /**

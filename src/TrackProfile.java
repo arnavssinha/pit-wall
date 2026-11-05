@@ -19,6 +19,9 @@ public final class TrackProfile {
     /** Typical green-flag race lap in seconds; the speed model is calibrated to it. */
     private final double medianRaceLapSeconds;
 
+    /** How hard the surface and layout are on tires; 1.0 is neutral. */
+    private final double trackWearMultiplier;
+
     /** Difficulty label shown to the player. */
     private final String difficultyLabel;
 
@@ -36,18 +39,20 @@ public final class TrackProfile {
      * @param country country
      * @param lapLengthMeters official lap length in meters
      * @param medianRaceLapSeconds typical race lap in seconds
+     * @param trackWearMultiplier tire wear multiplier, 1.0 is neutral
      * @param difficultyLabel difficulty label
      * @param description one-line description
      * @param dataSource note on where the data came from
      */
     public TrackProfile(String id, String name, String country, double lapLengthMeters,
-                        double medianRaceLapSeconds, String difficultyLabel, String description,
+                        double medianRaceLapSeconds, double trackWearMultiplier, String difficultyLabel, String description,
                         String dataSource) {
         this.id = id;
         this.name = name;
         this.country = country;
         this.lapLengthMeters = lapLengthMeters;
         this.medianRaceLapSeconds = medianRaceLapSeconds;
+        this.trackWearMultiplier = trackWearMultiplier;
         this.difficultyLabel = difficultyLabel;
         this.description = description;
         this.dataSource = dataSource;
@@ -96,6 +101,15 @@ public final class TrackProfile {
      */
     public double getMedianRaceLapSeconds() {
         return medianRaceLapSeconds;
+    }
+
+    /**
+     * Returns the tire wear multiplier.
+     *
+     * @return wear multiplier, 1.0 is neutral
+     */
+    public double getTrackWearMultiplier() {
+        return trackWearMultiplier;
     }
 
     /**

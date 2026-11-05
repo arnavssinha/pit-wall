@@ -72,3 +72,27 @@ are not yet checked against FastF1 data.
 - Second pass from owner feedback: layout shrunk to 50 percent, track drawn 32 units wide, cars 10 units
   long. The inside edge of tight bends is pinched (`TrackDrawing.limitInside`) so the wide track never
   folds over itself at the chicanes.
+
+## M2 Car model (2026-11-05)
+
+**Done**
+- `Compound` (Soft, Medium, Hard, Intermediate, Wet) with dry grip, temperature window, life in laps
+  and ideal wetness. `PushLevel` (Conserve, Balanced, Push) with pace, intensity (wear grows with its
+  square) and heat.
+- `Tire`: temperature chases a target set by load and push; wear per meter is defined so a lap at
+  Balanced on a neutral track uses exactly 1 / lifeLaps; grip = dry grip x temperature x wear (with a
+  cliff) x wetness. Sprint scaling is documented in `Compound`.
+- `Brakes` heat with braking power and fade above 1000 C. `Ers` charges under braking and gives a 3 percent
+  speed boost on straights while deploying.
+- `ProfileSet` caches a speed profile per grip level (HashMap), so worn or cold tires and fading brakes
+  really slow the car in corners and braking zones. `LapCalibrator.meanLoadPerMeter` makes heat and wear
+  fair across tracks.
+- Tire-wear history table (cars x laps, `double[][]`) in `Race`.
+- UI: `GaugePanel` (push level, compound, tire temperature with its green window, wear, brakes, ERS),
+  tire icons in the timing tower, keys Q/W/E and X.
+
+**Verified:** 15/15 tests. Measured on Monza, normalized to a neutral track: Soft 5.2, Medium 7.4,
+Hard 11.1 laps of life. Medium lap 2: Conserve 85.98, Balanced 85.22, Push 84.87 s. Fresh Soft beats Hard
+by 0.6 s; at lap 9 the Soft is 7.6 s slower. Gauges and keys checked with screenshots.
+
+**Next:** M3, multi-car racing (qualifying grid, slipstream, lapped cars).

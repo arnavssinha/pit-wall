@@ -58,24 +58,58 @@ public final class LapCalibrator {
     }
 
     /**
+     * Measures the average tire load per meter over a clean lap at the reference condition
+     * (Balanced, fresh Medium, no ERS). Tire wear and heat are divided by this number, so on every
+     * track a lap at average effort costs exactly 1 / lifeLaps of a tire.
+     *
+     * @param track the track
+     * @param gripScale the track's calibrated grip scale
+     * @return mean load per meter, 1 or more
+     */
+    public static double meanLoadPerMeter(Track track, double gripScale) {
+        double grip = gripScale * Compound.MEDIUM.getDryGrip();
+        SpeedProfile profile = new SpeedProfile(track, grip, Tuning.TOP_SPEED);
+        Driver tester = new Driver(0, "CAL", "Calibration car", new Team("Calibration", "#FFFFFF"));
+        Car car = new Car(0, tester, 1, 1.0, 0.0, 0.0, Compound.MEDIUM, false);
+        double lap = track.getLapLength();
+        double dt = Tuning.SIM_STEP_SECONDS;
+        double weighted = 0;
+        double meters = 0;
+        while (car.getDistance() < 2 * lap) {
+            car.approachSpeed(profile.speedAt(car.getDistance()), grip, dt);
+            double move = car.getSpeed() * dt;
+            car.advance(move, dt);
+            if (car.getDistance() >= lap) {
+                double curvature = track.getSample(track.indexAt(car.getDistance())).getCurvature();
+                double lateral = car.getSpeed() * car.getSpeed() * Math.abs(curvature);
+                weighted += CarPhysics.load(lateral, car.getDeceleration()) * move;
+                meters += move;
+            }
+        }
+        return weighted / meters;
+    }
+
+    /**
      * Simulates a lone car with a flying start and returns its second lap time.
-     * The first lap only brings the car up to racing speed.
+     * The first lap only brings the car up to racing speed. The car runs at the brief's reference
+     * condition: Balanced push on fresh Medium tires in their temperature window, no ERS.
      *
      * @param track the track
      * @param gripScale grip multiplier to test
      * @return lap time in seconds
      */
     public static double cleanLapSeconds(Track track, double gripScale) {
-        SpeedProfile profile = new SpeedProfile(track, gripScale, Tuning.TOP_SPEED);
+        double grip = gripScale * Compound.MEDIUM.getDryGrip();
+        SpeedProfile profile = new SpeedProfile(track, grip, Tuning.TOP_SPEED);
         Driver tester = new Driver(0, "CAL", "Calibration car", new Team("Calibration", "#FFFFFF"));
-        Car car = new Car(0, tester, 1, 1.0, 0.0, 0.0);
+        Car car = new Car(0, tester, 1, 1.0, 0.0, 0.0, Compound.MEDIUM, false);
         double lap = track.getLapLength();
         double dt = Tuning.SIM_STEP_SECONDS;
         double time = 0;
         double lapStart = 0;
         boolean timing = false;
         while (true) {
-            car.approachSpeed(profile.speedAt(car.getDistance()), gripScale, dt);
+            car.approachSpeed(profile.speedAt(car.getDistance()), grip, dt);
             double before = car.getDistance();
             double move = car.getSpeed() * dt;
             car.advance(move, dt);

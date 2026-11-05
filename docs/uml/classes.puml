@@ -43,6 +43,35 @@ package ui <<Frame>> {
     +getFps() : double
     +countObjects(GContainer) : int
   }
+  class GaugeBar {
+    -min : double
+    -max : double
+    -needle : boolean
+    -band : GRect
+    -marker : GRect
+    -valueLabel : GLabel
+    {static} 5 constants
+    +GaugeBar(String, double, double, boolean)
+    +setBand(double, double) : void
+    +setValue(double, String, Color) : void
+  }
+  class GaugePanel {
+    -title : GLabel
+    -pushHighlight : GRect
+    -pushLabels : GLabel[]
+    -compoundBadge : GOval
+    -compoundLetter : GLabel
+    -compoundName : GLabel
+    -tireTemp : GaugeBar
+    -tireWear : GaugeBar
+    -brakeTemp : GaugeBar
+    -battery : GaugeBar
+    -ersLine : GLabel
+    -shownCompound : Compound
+    {static} 7 constants
+    +GaugePanel()
+    +update(Car) : void
+  }
   class HudPanel {
     -race : Race
     -topLine : GLabel
@@ -69,7 +98,8 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 21 constants
+    {static} 27 constants
+    +compoundColor(Compound) : Color
     +teamColor(Team) : Color
   }
   class PitWall {
@@ -92,6 +122,7 @@ package ui <<Frame>> {
     -tower : TimingTower
     -miniMap : MiniMap
     -hud : HudPanel
+    -gauges : GaugePanel
     -debug : DebugOverlay
     -followed : Car
     -speedIndex : int
@@ -118,6 +149,8 @@ package ui <<Frame>> {
     -colorBars : GRect[]
     -codeLabels : GLabel[]
     -gapLabels : GLabel[]
+    -tireBadges : GOval[]
+    -tireLetters : GLabel[]
     {static} 4 constants
     +TimingTower(Race)
     +update() : void
@@ -150,13 +183,30 @@ package ui <<Frame>> {
   }
 }
 package sim <<Frame>> {
+  class Brakes {
+    -temperature : double
+    +Brakes()
+    +update(double, double, double, double, double) : void
+    +addHeat(double) : void
+    +fadeFactor() : double
+    +getTemperature() : double
+  }
   class Car {
     -id : int
     -driver : Driver
     -gridPosition : int
     -paceFactor : double
+    -player : boolean
+    -brakes : Brakes
+    -ers : Ers
+    -tire : Tire
+    -pushLevel : PushLevel
+    -ersWanted : boolean
     -distance : double
     -speed : double
+    -deceleration : double
+    -currentTopSpeed : double
+    -currentGrip : double
     -lateralOffset : double
     -lapsCompleted : int
     -lapStartTime : double
@@ -165,12 +215,21 @@ package sim <<Frame>> {
     -finished : boolean
     -finishTime : double
     -finishPosition : int
-    +Car(int, Driver, int, double, double, double)
+    +targetSpeed(ProfileSet, TrackConditions) : double
     +approachSpeed(double, double, double) : void
     +advance(double, double) : void
     +completeLap(double) : void
     +finish(double, int) : void
     +capSpeed(double) : void
+    +fitTires(Compound) : void
+    +setPushLevel(PushLevel) : void
+    +setErsWanted(boolean) : void
+    +isErsWanted() : boolean
+    +isPlayer() : boolean
+    +getTire() : Tire
+    +getBrakes() : Brakes
+    +getErs() : Ers
+    +getPushLevel() : PushLevel
     +getTopSpeed() : double
     +getId() : int
     +getDriver() : Driver
@@ -178,6 +237,7 @@ package sim <<Frame>> {
     +getPaceFactor() : double
     +getDistance() : double
     +getSpeed() : double
+    +getDeceleration() : double
     +getLateralOffset() : double
     +getLapsCompleted() : int
     +getLastLapTime() : double
@@ -190,7 +250,25 @@ package sim <<Frame>> {
     +gripAcceleration(double, double) : double
     +cornerSpeedLimit(double, double, double) : double
     +acceleration(double, double) : double
+    +load(double, double) : double
     +braking(double, double) : double
+  }
+  enum Compound {
+    -displayName : String
+    -letter : String
+    -dryGrip : double
+    -windowLow : double
+    -windowHigh : double
+    -lifeLaps : double
+    -idealWetness : double
+    +getDisplayName() : String
+    +getLetter() : String
+    +getDryGrip() : double
+    +getWindowLow() : double
+    +getWindowHigh() : double
+    +getLifeLaps() : double
+    +getIdealWetness() : double
+    +isDry() : boolean
   }
   class Driver {
     -number : int
@@ -203,25 +281,57 @@ package sim <<Frame>> {
     +getName() : String
     +getTeam() : Team
   }
+  class Ers {
+    -charge : double
+    -deploying : boolean
+    +Ers()
+    +update(double, double, boolean, boolean) : void
+    +boost() : double
+    +getCharge() : double
+    +isDeploying() : boolean
+  }
   class LapCalibrator {
     {static} 2 constants
     +gripScaleFor(Track) : synchronized double
+    +meanLoadPerMeter(Track, double) : double
     +cleanLapSeconds(Track, double) : double
+  }
+  class ProfileSet {
+    -track : Track
+    -gripScale : double
+    -profiles : HashMap<Integer, SpeedProfile>
+    -meanLoad : double
+    +ProfileSet(Track, double)
+    +forCarGrip(double) : SpeedProfile
+    +getMeanLoad() : double
+    +getGripScale() : double
+  }
+  enum PushLevel {
+    -displayName : String
+    -pace : double
+    -intensity : double
+    -heat : double
+    +getDisplayName() : String
+    +getPace() : double
+    +getWearFactor() : double
+    +getHeat() : double
   }
   class Race {
     -config : RaceConfig
     -track : Track
-    -profile : SpeedProfile
+    -profiles : ProfileSet
+    -conditions : TrackConditions
     -random : Random
     -cars : ArrayList<Car>
     -standings : ArrayList<Car>
     -playerCar : Car
     -lapTimes : double[][]
+    -wearHistory : double[][]
     -loopTimes : double[][]
     -loopOrigin : double
     -time : double
     -finishedCount : int
-    +Race(RaceConfig, Track, List<Driver>)
+    +Race(RaceConfig, Track, List<Driver>, Compound)
     +step() : void
     +carAheadOnTrack(Car) : Car
     +trackGap(Car, Car) : double
@@ -236,7 +346,9 @@ package sim <<Frame>> {
     +getPlayerCar() : Car
     +getTrack() : Track
     +getConfig() : RaceConfig
-    +getProfile() : SpeedProfile
+    +getProfiles() : ProfileSet
+    +getConditions() : TrackConditions
+    +getWearAtLap(Car, int) : double
     +getLapTime(Car, int) : double
   }
   class RaceConfig {
@@ -265,6 +377,19 @@ package sim <<Frame>> {
     +getName() : String
     +getColorHex() : String
   }
+  class Tire {
+    -compound : Compound
+    -temperature : double
+    -wear : double
+    +Tire(Compound)
+    +grip(double) : double
+    +temperatureFactor() : double
+    +wearFactor() : double
+    +wetnessFactor(double) : double
+    +getCompound() : Compound
+    +getTemperature() : double
+    +getWear() : double
+  }
   class Track {
     -profile : TrackProfile
     -samples : ArrayList<TrackSample>
@@ -291,12 +416,25 @@ package sim <<Frame>> {
     +headingAt(double) : double
     +angleDifference(double, double) : double
   }
+  class TrackConditions {
+    -trackTemp : double
+    -airTemp : double
+    -wetness : double
+    +TrackConditions(double, double, double)
+    +neutral() : TrackConditions
+    +tireAmbient() : double
+    +getTrackTemp() : double
+    +getAirTemp() : double
+    +wetnessAt(double) : double
+    +setWetness(double) : void
+  }
   class TrackProfile {
     -id : String
     -name : String
     -country : String
     -lapLengthMeters : double
     -medianRaceLapSeconds : double
+    -trackWearMultiplier : double
     -difficultyLabel : String
     -description : String
     -dataSource : String
@@ -305,6 +443,7 @@ package sim <<Frame>> {
     +getCountry() : String
     +getLapLengthMeters() : double
     +getMedianRaceLapSeconds() : double
+    +getTrackWearMultiplier() : double
     +getDifficultyLabel() : String
     +getDescription() : String
     +getDataSource() : String
@@ -325,7 +464,7 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 31 constants
+    {static} 66 constants
   }
 }
 package data <<Frame>> {
@@ -344,9 +483,17 @@ package data <<Frame>> {
 Camera --> WorldView
 Camera --> TrackDrawing
 Car --> Driver
+Car --> Brakes
+Car --> Ers
+Car --> Tire
+Car --> PushLevel
 CarSprite --> Car
 GCompound <|-- DebugOverlay
 Driver --> Team
+GCompound <|-- GaugeBar
+GCompound <|-- GaugePanel
+GaugePanel --> GaugeBar
+GaugePanel --> Compound
 GCompound <|-- HudPanel
 HudPanel --> Race
 GCompound <|-- MiniMap
@@ -356,9 +503,12 @@ PitWall --> Track
 PitWall --> Driver
 PitWall --> Race
 PitWall --> RaceScreen
+ProfileSet --> Track
+ProfileSet --> SpeedProfile
 Race --> RaceConfig
 Race --> Track
-Race --> SpeedProfile
+Race --> ProfileSet
+Race --> TrackConditions
 Race --> Car
 RaceScreen --> Race
 RaceScreen --> WorldView
@@ -366,11 +516,13 @@ RaceScreen --> Camera
 RaceScreen --> TimingTower
 RaceScreen --> MiniMap
 RaceScreen --> HudPanel
+RaceScreen --> GaugePanel
 RaceScreen --> DebugOverlay
 RaceScreen --> Car
 SpeedProfile --> Track
 GCompound <|-- TimingTower
 TimingTower --> Race
+Tire --> Compound
 Track --> TrackProfile
 Track --> TrackSample
 TrackDrawing --> Track

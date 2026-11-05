@@ -34,6 +34,7 @@ public final class TrackLoader {
                 required(props, "country", id),
                 number(props, "lapLengthMeters", id),
                 number(props, "medianRaceLapSeconds", id),
+                number(props, "trackWearMultiplier", id),
                 required(props, "difficultyLabel", id),
                 required(props, "description", id),
                 required(props, "dataSource", id));

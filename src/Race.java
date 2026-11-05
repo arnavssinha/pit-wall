@@ -19,8 +19,11 @@ public final class Race {
     /** The circuit. */
     private final Track track;
 
-    /** Target speeds around the lap. */
-    private final SpeedProfile profile;
+    /** Target speeds around the lap for every grip level. */
+    private final ProfileSet profiles;
+
+    /** Current weather on track. */
+    private final TrackConditions conditions;
 
     /** The one random number generator for this race. */
     private final Random random;
@@ -36,6 +39,9 @@ public final class Race {
 
     /** Lap time table: row = car id, column = lap number minus 1, value in seconds (0 if not yet driven). */
     private final double[][] lapTimes;
+
+    /** Tire wear table: row = car id, column = lap number minus 1, value = wear when that lap ended. */
+    private final double[][] wearHistory;
 
     /**
      * Timing loop table: row = car id, column = loop number, value = race time the car crossed it
@@ -63,9 +69,10 @@ public final class Race {
      * @param config race settings
      * @param track the circuit
      * @param roster every available driver; must hold at least config.getCarCount() drivers
+     * @param startCompound tires every car starts on
      * @throws IllegalArgumentException if the roster is too small
      */
-    public Race(RaceConfig config, Track track, List<Driver> roster) {
+    public Race(RaceConfig config, Track track, List<Driver> roster, Compound startCompound) {
         if (roster.size() < config.getCarCount()) {
             throw new IllegalArgumentException("Roster has " + roster.size() + " drivers but "
                     + config.getCarCount() + " cars were requested");
@@ -73,21 +80,24 @@ public final class Race {
         this.config = config;
         this.track = track;
         this.random = new Random(config.getSeed());
-        this.profile = new SpeedProfile(track, LapCalibrator.gripScaleFor(track), Tuning.TOP_SPEED);
+        this.profiles = new ProfileSet(track, LapCalibrator.gripScaleFor(track));
+        this.conditions = TrackConditions.neutral();
 
         ArrayList<Driver> field = new ArrayList<Driver>(roster);
         Collections.shuffle(field, random);
+        int playerSlot = random.nextInt(config.getCarCount());
         for (int i = 0; i < config.getCarCount(); i++) {
             double pace = 1.0 + (random.nextDouble() * 2 - 1) * Tuning.PACE_NOISE;
             double gridDistance = -(Tuning.GRID_FIRST_SLOT_OFFSET + i * Tuning.GRID_SLOT_SPACING);
             double gridLateral = (i % 2 == 0 ? 1 : -1) * Tuning.GRID_LATERAL_OFFSET;
-            Car car = new Car(i, field.get(i), i + 1, pace, gridDistance, gridLateral);
+            Car car = new Car(i, field.get(i), i + 1, pace, gridDistance, gridLateral, startCompound, i == playerSlot);
             cars.add(car);
             standings.add(car);
         }
-        playerCar = cars.get(random.nextInt(cars.size()));
+        playerCar = cars.get(playerSlot);
 
         lapTimes = new double[cars.size()][config.getLaps()];
+        wearHistory = new double[cars.size()][config.getLaps()];
         loopOrigin = -(Tuning.GRID_FIRST_SLOT_OFFSET + Tuning.MAX_CARS * Tuning.GRID_SLOT_SPACING);
         double timedDistance = (config.getLaps() + 1) * track.getLapLength() - loopOrigin;
         loopTimes = new double[cars.size()][(int) Math.ceil(timedDistance / Tuning.TIMING_LOOP_SPACING) + 1];
@@ -109,6 +119,7 @@ public final class Race {
             Car car = cars.get(i);
             double before = car.getDistance();
             car.advance(moves[i], dt);
+            car.updateSystems(dt, moves[i], track, profiles, conditions, wantsDeploy(car));
             recordCrossings(car, before, moves[i], dt);
         }
         time += dt;
@@ -125,10 +136,7 @@ public final class Race {
      * @return meters to move, never negative
      */
     private double planMove(Car car, double dt) {
-        double target = profile.speedAt(car.getDistance()) * car.getPaceFactor();
-        if (car.isFinished()) {
-            target *= Tuning.COOL_DOWN_PACE;
-        }
+        double target = car.targetSpeed(profiles, conditions);
         Car ahead = carAheadOnTrack(car);
         double gap = ahead == null ? Double.MAX_VALUE : trackGap(car, ahead);
         if (ahead != null) {
@@ -137,7 +145,7 @@ public final class Race {
                 target = Math.min(target, ahead.getSpeed());
             }
         }
-        car.approachSpeed(target, profile.getGripScale(), dt);
+        car.approachSpeed(target, profiles.getGripScale(), dt);
         double move = car.getSpeed() * dt;
         double room = gap - Tuning.MIN_SEPARATION;
         if (move > room) {
@@ -145,6 +153,20 @@ public final class Race {
             car.capSpeed(ahead.getSpeed());
         }
         return move;
+    }
+
+    /**
+     * Decides whether a car spends battery energy this step. The player's car follows the player's
+     * deploy switch; computer cars deploy while the battery is comfortably charged.
+     *
+     * @param car the car
+     * @return true to deploy on straights
+     */
+    private boolean wantsDeploy(Car car) {
+        if (car.isPlayer()) {
+            return car.isErsWanted();
+        }
+        return car.getErs().getCharge() > Tuning.AI_ERS_DEPLOY_ABOVE;
     }
 
     /**
@@ -207,6 +229,7 @@ public final class Race {
             int lapIndex = car.getLapsCompleted() - 1;
             if (lapIndex < config.getLaps()) {
                 lapTimes[car.getId()][lapIndex] = car.getLastLapTime();
+                wearHistory[car.getId()][lapIndex] = car.getTire().getWear();
             }
             if (car.getLapsCompleted() >= config.getLaps() || finishedCount > 0) {
                 finishedCount++;
@@ -382,12 +405,32 @@ public final class Race {
     }
 
     /**
-     * Returns the speed profile in use.
+     * Returns the speed profiles in use.
      *
-     * @return the profile
+     * @return the profile set
      */
-    public SpeedProfile getProfile() {
-        return profile;
+    public ProfileSet getProfiles() {
+        return profiles;
+    }
+
+    /**
+     * Returns the current weather on track.
+     *
+     * @return the conditions
+     */
+    public TrackConditions getConditions() {
+        return conditions;
+    }
+
+    /**
+     * Returns a car's tire wear at the end of a lap.
+     *
+     * @param car the car
+     * @param lap lap number, starting at 1
+     * @return wear, or 0 if the lap is not complete
+     */
+    public double getWearAtLap(Car car, int lap) {
+        return wearHistory[car.getId()][lap - 1];
     }
 
     /**

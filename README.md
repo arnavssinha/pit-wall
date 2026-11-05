@@ -24,10 +24,12 @@ you make the strategy calls.
 - Fallback that always works: open the Terminal app, type `java -jar ` (with a space at the end),
   drag `PitWall.jar` into the Terminal window, and press Return.
 
-## Controls (M1)
+## Controls
 
 | Key | Action |
 |---|---|
+| Q / W / E | Push level: Conserve / Balanced / Push |
+| X | ERS deploy on or off (spends the battery on straights for extra speed) |
 | Space | Pause or resume |
 | T | Change time speed: 1x, 2x, 4x, 8x (starts at 2x) |
 | Z | Switch between follow camera and whole-track view |

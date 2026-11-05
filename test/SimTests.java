@@ -50,6 +50,12 @@ public final class SimTests {
         check("drawn cars cannot overlap at minimum gap", () -> testDrawnCarsFit());
         check("same seed gives the same race", () -> testDeterminism());
         check("full race: no overlap, NaN, laps, order, gaps", () -> testFullRaceInvariants());
+        check("tire wear only ever increases", () -> testWearMonotonic());
+        check("tire life: Soft 5-6, Medium 7-8, Hard 10+ laps", () -> testTireLife());
+        check("Soft beats Hard fresh, loses when worn", () -> testCompoundOrdering());
+        check("Push is faster but wears more; Conserve the opposite", () -> testPushTradeOff());
+        check("wet tires lose in the dry and win in the wet", () -> testWetTires());
+        check("brakes fade only when hot; ERS stays in 0-100%", () -> testBrakesAndErs());
     }
 
     /**
@@ -172,12 +178,12 @@ public final class SimTests {
     private void testSpeedProfile() {
         Track track = monza();
         double grip = LapCalibrator.gripScaleFor(track);
-        SpeedProfile profile = new SpeedProfile(track, grip, Tuning.TOP_SPEED);
+        SpeedProfile profile = new SpeedProfile(track, grip * Compound.MEDIUM.getDryGrip(), Tuning.TOP_SPEED);
         for (int i = 0; i < track.getSampleCount(); i++) {
             double v = profile.speedAt(track.getSample(i).getDistance());
             double next = profile.speedAt(track.getSample(i + 1).getDistance());
             require(v <= profile.cornerLimitAt(i) + 1e-9, "sample " + i + " above its corner limit");
-            double maxEntry = Math.sqrt(next * next + 2 * CarPhysics.braking(next, grip) * track.getSpacing());
+            double maxEntry = Math.sqrt(next * next + 2 * CarPhysics.braking(next, grip * Compound.MEDIUM.getDryGrip()) * track.getSpacing());
             require(v <= maxEntry + 1e-6, "sample " + i + " cannot brake in time");
             require(v > 5, "sample " + i + " is implausibly slow: " + v);
         }
@@ -247,8 +253,8 @@ public final class SimTests {
     private void testDeterminism() {
         Track track = monza();
         List<Driver> drivers = roster();
-        Race a = new Race(new RaceConfig(22, 3, 42L), track, drivers);
-        Race b = new Race(new RaceConfig(22, 3, 42L), track, drivers);
+        Race a = new Race(new RaceConfig(22, 3, 42L), track, drivers, Compound.MEDIUM);
+        Race b = new Race(new RaceConfig(22, 3, 42L), track, drivers, Compound.MEDIUM);
         runToEnd(a);
         runToEnd(b);
         for (int i = 0; i < a.getStandings().size(); i++) {
@@ -288,7 +294,7 @@ public final class SimTests {
      */
     private void testFullRaceInvariants() {
         Track track = monza();
-        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 7L), track, roster());
+        Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 7L), track, roster(), Compound.MEDIUM);
         long start = System.currentTimeMillis();
         int steps = 0;
         double closest = Double.MAX_VALUE;
@@ -332,5 +338,152 @@ public final class SimTests {
             require(Math.abs(sum - car.getFinishTime()) < 1e-6, "lap times do not add up to finish time");
         }
         require(elapsed < FULL_RACE_BUDGET_MS, "full race took " + elapsed + " ms, budget " + FULL_RACE_BUDGET_MS);
+    }
+
+    /**
+     * Drives one car alone for a number of laps from a standing start, the same way the race does,
+     * and records each lap's time and the tire wear at the end of each lap.
+     *
+     * @param compound tires fitted
+     * @param push push level held all stint
+     * @param laps laps to drive
+     * @return two rows: row 0 lap times, row 1 wear at the end of each lap
+     */
+    private static double[][] runStint(Compound compound, PushLevel push, int laps) {
+        Track track = monza();
+        ProfileSet profiles = new ProfileSet(track, LapCalibrator.gripScaleFor(track));
+        TrackConditions conditions = TrackConditions.neutral();
+        Driver driver = new Driver(0, "TST", "Test driver", new Team("Test", "#FFFFFF"));
+        Car car = new Car(0, driver, 1, 1.0, 0, 0, compound, false);
+        car.setPushLevel(push);
+        double dt = Tuning.SIM_STEP_SECONDS;
+        double[][] out = new double[2][laps];
+        double time = 0;
+        double lapStart = 0;
+        int lap = 0;
+        double lastWear = 0;
+        while (lap < laps) {
+            double target = car.targetSpeed(profiles, conditions);
+            car.approachSpeed(target, profiles.getGripScale(), dt);
+            double move = car.getSpeed() * dt;
+            car.advance(move, dt);
+            car.updateSystems(dt, move, track, profiles, conditions, false);
+            time += dt;
+            require(car.getTire().getWear() >= lastWear, "wear went down");
+            lastWear = car.getTire().getWear();
+            if (car.getDistance() >= (lap + 1) * track.getLapLength()) {
+                out[0][lap] = time - lapStart;
+                out[1][lap] = lastWear;
+                lapStart = time;
+                lap++;
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Average wear per lap over laps 2 to 4, converted to a neutral track (wear multiplier 1.0).
+     *
+     * @param stint result of runStint
+     * @return wear per lap on a neutral track
+     */
+    private static double neutralWearPerLap(double[][] stint) {
+        double perLap = (stint[1][3] - stint[1][0]) / 3.0;
+        return perLap / monza().getProfile().getTrackWearMultiplier();
+    }
+
+    /**
+     * Checks wear never decreases during a stint (runStint checks every step).
+     */
+    private void testWearMonotonic() {
+        double[][] stint = runStint(Compound.SOFT, PushLevel.PUSH, 4);
+        require(stint[1][3] > stint[1][0], "wear did not grow");
+    }
+
+    /**
+     * Checks the brief's sprint scaling: laps to full wear at Balanced on a neutral track.
+     */
+    private void testTireLife() {
+        double soft = 1.0 / neutralWearPerLap(runStint(Compound.SOFT, PushLevel.BALANCED, 4));
+        double medium = 1.0 / neutralWearPerLap(runStint(Compound.MEDIUM, PushLevel.BALANCED, 4));
+        double hard = 1.0 / neutralWearPerLap(runStint(Compound.HARD, PushLevel.BALANCED, 4));
+        System.out.printf("      life in laps (neutral track): soft %.1f, medium %.1f, hard %.1f%n", soft, medium, hard);
+        require(soft >= 5.0 && soft <= 6.0, "soft life " + soft);
+        require(medium >= 7.0 && medium <= 8.0, "medium life " + medium);
+        require(hard >= 10.0, "hard life " + hard);
+    }
+
+    /**
+     * Checks a fresh Soft laps faster than a fresh Hard, and a worn Soft slower than a Hard of the same age.
+     */
+    private void testCompoundOrdering() {
+        double[][] soft = runStint(Compound.SOFT, PushLevel.BALANCED, 9);
+        double[][] hard = runStint(Compound.HARD, PushLevel.BALANCED, 9);
+        System.out.printf("      lap 2: soft %.2f hard %.2f; lap 9: soft %.2f hard %.2f%n",
+                soft[0][1], hard[0][1], soft[0][8], hard[0][8]);
+        require(soft[0][1] < hard[0][1], "fresh soft should be faster than fresh hard");
+        require(soft[0][8] > hard[0][8], "worn soft should be slower than hard");
+    }
+
+    /**
+     * Checks Push laps faster and wears more than Balanced, and Conserve laps slower and wears less.
+     */
+    private void testPushTradeOff() {
+        double[][] conserve = runStint(Compound.MEDIUM, PushLevel.CONSERVE, 4);
+        double[][] balanced = runStint(Compound.MEDIUM, PushLevel.BALANCED, 4);
+        double[][] push = runStint(Compound.MEDIUM, PushLevel.PUSH, 4);
+        System.out.printf("      lap 2 on Medium: conserve %.2f, balanced %.2f, push %.2f%n",
+                conserve[0][1], balanced[0][1], push[0][1]);
+        require(push[0][1] < balanced[0][1] && balanced[0][1] < conserve[0][1], "lap times not ordered by push");
+        require(push[1][3] > balanced[1][3] && balanced[1][3] > conserve[1][3], "wear not ordered by push");
+        double gain = balanced[0][1] - push[0][1];
+        require(gain < 1.0, "push gains " + gain + " s per lap, which makes pushing all race too strong");
+    }
+
+    /**
+     * Checks grip from wetness alone: rain tires lose to slicks in the dry and beat them in the wet,
+     * and full wets beat intermediates on a soaked track.
+     */
+    private void testWetTires() {
+        double softDry = wetGrip(Compound.SOFT, 0.0);
+        double wetDry = wetGrip(Compound.WET, 0.0);
+        double softWet = wetGrip(Compound.SOFT, 1.0);
+        double interWet = wetGrip(Compound.INTERMEDIATE, 1.0);
+        double wetWet = wetGrip(Compound.WET, 1.0);
+        double softDamp = wetGrip(Compound.SOFT, 0.6);
+        double interDamp = wetGrip(Compound.INTERMEDIATE, 0.6);
+        require(wetDry < softDry, "wets should lose in the dry");
+        require(wetWet > softWet && wetWet > interWet, "wets should win when soaked");
+        require(interDamp > softDamp, "intermediates should beat slicks on a damp track");
+    }
+
+    /**
+     * Grip from compound and wetness only.
+     *
+     * @param compound the compound
+     * @param wetness track wetness
+     * @return dry grip times wetness factor
+     */
+    private static double wetGrip(Compound compound, double wetness) {
+        return compound.getDryGrip() * new Tire(compound).wetnessFactor(wetness);
+    }
+
+    /**
+     * Checks brake fade starts only above the fade temperature, and the battery never leaves 0 to 1.
+     */
+    private void testBrakesAndErs() {
+        Brakes brakes = new Brakes();
+        require(brakes.fadeFactor() == 1.0, "cold brakes should not fade");
+        brakes.addHeat(Tuning.BRAKE_FADE_TEMP);
+        require(brakes.fadeFactor() < 1.0, "very hot brakes should fade");
+        Ers ers = new Ers();
+        for (int i = 0; i < 5000; i++) {
+            ers.update(Tuning.SIM_STEP_SECONDS, 0, true, true);
+        }
+        require(ers.getCharge() == 0 && !ers.isDeploying(), "battery should run flat and stop deploying");
+        for (int i = 0; i < 5000; i++) {
+            ers.update(Tuning.SIM_STEP_SECONDS, 40, false, true);
+        }
+        require(ers.getCharge() == 1.0, "battery should fill to exactly 100%");
     }
 }
