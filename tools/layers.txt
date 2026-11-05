@@ -1,0 +1,8 @@
+# Which layer each source file in src/ belongs to.
+# Format: <layer> <FileName.java>
+# Layers sim, ai, data and lab are HEADLESS: they must not import acm, java.awt or javax.swing.
+# Layer ui may import acm.graphics, acm.program, java.awt.Color, java.awt.Font
+# and java.awt.event key and mouse events (needed for ACM keyboard and mouse input).
+# tools/audit.sh fails if a file in src/ is missing from this list.
+sim Tuning.java
+ui PitWall.java
