@@ -69,12 +69,13 @@ public final class RaceScreen {
         this.followed = race.getPlayerCar();
         this.speedIndex = Tuning.DEFAULT_TIME_SPEED_INDEX;
 
-        world = new WorldView(race);
+        TrackDrawing drawing = new TrackDrawing(race.getTrack());
+        world = new WorldView(race, drawing);
         program.add(world);
         double viewLeft = TimingTower.WIDTH + 16;
         double viewTop = HudPanel.TOP_BAR_BOTTOM;
         double viewBottom = height - HudPanel.BOTTOM_PANEL_HEIGHT;
-        camera = new Camera(world, race.getTrack(), viewLeft, viewTop, width - viewLeft, viewBottom - viewTop);
+        camera = new Camera(world, drawing, viewLeft, viewTop, width - viewLeft, viewBottom - viewTop);
 
         tower = new TimingTower(race);
         tower.setLocation(8, 8);

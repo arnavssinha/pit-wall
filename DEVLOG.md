@@ -54,3 +54,18 @@ One entry per milestone: what was done, how it was checked, what is next.
 are not yet checked against FastF1 data.
 
 **Next:** M2, the car model (tires, brakes, ERS, push level, gauges).
+
+## M1 visual pass (2026-11-05), from owner feedback
+
+**Done**
+- `TrackDrawing`: the screen draws the layout shrunk to 65 percent while the track is drawn 20 units
+  wide and cars 8 units long, so there is more track and less empty grass. The simulation still uses
+  real meters, so lap times and calibration are unchanged.
+- Cars are drawn from 10 parts (tires, wings, body with sidepods, stripe, cockpit, helmet); the player
+  has a yellow ring and helmet.
+- Scenery: paved run-off along the whole lap, gravel traps on the outside of corners, mowed-grass
+  stripes, chequered start line, grid slot marks.
+- `Tuning.MIN_SEPARATION` raised to 14.5 m and grid slots to 16 m so the enlarged car drawings can never
+  overlap. A new test checks this.
+
+**Verified:** 9/9 tests, audit clean, self-test 59.5 FPS with 811 objects on the virtual display.

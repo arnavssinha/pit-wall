@@ -4,28 +4,30 @@ hide circle
 package ui <<Frame>> {
   class Camera {
     -world : WorldView
-    -track : Track
+    -drawing : TrackDrawing
     -centerX : double
     -centerY : double
     -overviewZoom : double
     -overview : boolean
     -followBlend : double
     {static} 2 constants
-    +Camera(WorldView, Track, double, double, double, double)
+    +Camera(WorldView, TrackDrawing, double, double, double, double)
     +toggleOverview() : void
     +isOverview() : boolean
     +update(Car) : void
   }
   class CarSprite {
     -car : Car
-    -body : GPolygon
+    -parts : List<GPolygon>
+    -ring : GOval
     -appliedDegrees : double
     -appliedEnlargement : double
-    {static} 1 constants
+    {static} 3 constants
     +CarSprite(Car, boolean)
-    +getBody() : GPolygon
+    +getParts() : List<GPolygon>
+    +getRing() : GOval
     +getCar() : Car
-    +update(Track, double) : void
+    +update(TrackDrawing, double) : void
   }
   class DebugOverlay {
     -line1 : GLabel
@@ -67,7 +69,7 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 18 constants
+    {static} 21 constants
     +teamColor(Team) : Color
   }
   class PitWall {
@@ -120,12 +122,26 @@ package ui <<Frame>> {
     +TimingTower(Race)
     +update() : void
   }
-  class WorldView {
+  class TrackDrawing {
     -track : Track
+    {static} 5 constants
+    +TrackDrawing(Track)
+    +getTrack() : Track
+    +x(double, double) : double
+    +y(double, double) : double
+    +offsetX(double, double) : double
+    +offsetY(double, double) : double
+    +minX() : double
+    +maxX() : double
+    +minY() : double
+    +maxY() : double
+  }
+  class WorldView {
+    -drawing : TrackDrawing
     -sprites : List<CarSprite>
     -zoom : double
-    {static} 4 constants
-    +WorldView(Race)
+    {static} 8 constants
+    +WorldView(Race, TrackDrawing)
     +setZoom(double) : void
     +getZoom() : double
     +updateCars() : void
@@ -326,7 +342,7 @@ package data <<Frame>> {
   }
 }
 Camera --> WorldView
-Camera --> Track
+Camera --> TrackDrawing
 Car --> Driver
 CarSprite --> Car
 GCompound <|-- DebugOverlay
@@ -357,7 +373,8 @@ GCompound <|-- TimingTower
 TimingTower --> Race
 Track --> TrackProfile
 Track --> TrackSample
+TrackDrawing --> Track
 GCompound <|-- WorldView
-WorldView --> Track
+WorldView --> TrackDrawing
 WorldView --> CarSprite
 @enduml

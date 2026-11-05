@@ -11,6 +11,15 @@ public final class Palette {
     /** Grass around the track. */
     public static final Color GRASS = new Color(46, 92, 58);
 
+    /** Lighter grass for the mowed stripes. */
+    public static final Color GRASS_LIGHT = new Color(54, 104, 66);
+
+    /** Paved run-off area beside the track. */
+    public static final Color RUNOFF = new Color(88, 96, 92);
+
+    /** Gravel traps on the outside of corners. */
+    public static final Color GRAVEL = new Color(196, 178, 132);
+
     /** Track surface. */
     public static final Color ASPHALT = new Color(58, 61, 69);
 

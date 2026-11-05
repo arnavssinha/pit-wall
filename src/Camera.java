@@ -6,8 +6,8 @@
  */
 public final class Camera {
 
-    /** Zoom used when following a car, in pixels per meter. Drawing choice. */
-    public static final double FOLLOW_ZOOM = 3.4;
+    /** Zoom used when following a car, in pixels per drawing unit. Drawing choice. */
+    public static final double FOLLOW_ZOOM = 4.0;
 
     /** Fraction of the remaining distance covered each frame when easing (larger is snappier). */
     private static final double EASE = 0.12;
@@ -15,8 +15,8 @@ public final class Camera {
     /** The world being moved and zoomed. */
     private final WorldView world;
 
-    /** The track, for its bounds and for car positions. */
-    private final Track track;
+    /** Converts track positions to drawing units, for bounds and car positions. */
+    private final TrackDrawing drawing;
 
     /** Center of the screen area the world is shown in, x in pixels. */
     private final double centerX;
@@ -37,20 +37,20 @@ public final class Camera {
      * Creates a camera that starts in follow mode.
      *
      * @param world the world view
-     * @param track the track
+     * @param drawing converts track positions to drawing units
      * @param left left edge of the screen area for the world, in pixels
      * @param top top edge of that area
      * @param width width of that area
      * @param height height of that area
      */
-    public Camera(WorldView world, Track track, double left, double top, double width, double height) {
+    public Camera(WorldView world, TrackDrawing drawing, double left, double top, double width, double height) {
         this.world = world;
-        this.track = track;
+        this.drawing = drawing;
         this.centerX = left + width / 2;
         this.centerY = top + height / 2;
-        double margin = 40;
-        double zx = (width - margin) / (track.getMaxX() - track.getMinX());
-        double zy = (height - margin) / (track.getMaxY() - track.getMinY());
+        double margin = 40 + TrackDrawing.TRACK_WIDTH;
+        double zx = (width - margin) / (drawing.maxX() - drawing.minX());
+        double zy = (height - margin) / (drawing.maxY() - drawing.minY());
         this.overviewZoom = Math.min(zx, zy);
         this.overview = false;
         this.followBlend = 1.0;
@@ -93,10 +93,10 @@ public final class Camera {
         if (Math.abs(targetBlend - followBlend) < 0.001) {
             followBlend = targetBlend;
         }
-        double trackX = (track.getMinX() + track.getMaxX()) / 2;
-        double trackY = (track.getMinY() + track.getMaxY()) / 2;
-        double carX = track.xAt(focus.getDistance(), focus.getLateralOffset());
-        double carY = track.yAt(focus.getDistance(), focus.getLateralOffset());
+        double trackX = (drawing.minX() + drawing.maxX()) / 2;
+        double trackY = (drawing.minY() + drawing.maxY()) / 2;
+        double carX = drawing.x(focus.getDistance(), focus.getLateralOffset());
+        double carY = drawing.y(focus.getDistance(), focus.getLateralOffset());
         double lookX = trackX + (carX - trackX) * followBlend;
         double lookY = trackY + (carY - trackY) * followBlend;
         world.setLocation(centerX - world.toPixelX(lookX), centerY - world.toPixelY(lookY));

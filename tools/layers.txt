@@ -32,3 +32,4 @@ ui TimingTower.java
 ui HudPanel.java
 ui DebugOverlay.java
 ui Palette.java
+ui TrackDrawing.java

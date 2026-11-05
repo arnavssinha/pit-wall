@@ -47,6 +47,7 @@ public final class SimTests {
         check("speed profile respects corner limits", () -> testSpeedProfile());
         check("clean lap within 3% of target (calibration)", () -> testCalibration());
         check("car count outside 10-22 is rejected", () -> testConfigLimits());
+        check("drawn cars cannot overlap at minimum gap", () -> testDrawnCarsFit());
         check("same seed gives the same race", () -> testDeterminism());
         check("full race: no overlap, NaN, laps, order, gaps", () -> testFullRaceInvariants());
     }
@@ -194,6 +195,17 @@ public final class SimTests {
         System.out.printf("      monza: grip scale %.3f, clean lap %.2f s, target %.2f s, error %.2f%%%n",
                 grip, lap, target, error * 100);
         require(error <= Tuning.CALIBRATION_TOLERANCE, "clean lap " + lap + " misses target " + target);
+    }
+
+    /**
+     * Checks that two cars at the minimum gap are drawn without overlapping, given that the
+     * screen shrinks the layout and enlarges the cars, and that grid slots respect the gap.
+     */
+    private void testDrawnCarsFit() {
+        double drawnGap = Tuning.MIN_SEPARATION * TrackDrawing.LAYOUT_SCALE;
+        require(drawnGap >= TrackDrawing.CAR_LENGTH + 1.0,
+                "cars at the minimum gap are " + drawnGap + " units apart but drawn " + TrackDrawing.CAR_LENGTH + " long");
+        require(Tuning.GRID_SLOT_SPACING >= Tuning.MIN_SEPARATION, "grid slots closer than the minimum gap");
     }
 
     /**

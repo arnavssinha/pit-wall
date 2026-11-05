@@ -75,8 +75,12 @@ public final class Tuning {
     /** Car width in meters, close to a 2026 F1 car. Used for drawing. */
     public static final double CAR_WIDTH = 1.9;
 
-    /** Smallest allowed nose-to-nose distance between two cars, in meters: one car length plus 1 m. */
-    public static final double MIN_SEPARATION = CAR_LENGTH + 1.0;
+    /**
+     * Smallest allowed nose-to-nose distance between two cars, in meters. Balance choice made for
+     * the picture: the screen draws cars larger than life on a shrunk layout (see TrackDrawing),
+     * and 14.5 m keeps those drawings from ever overlapping. A test checks this stays true.
+     */
+    public static final double MIN_SEPARATION = 14.5;
 
     /**
      * A following car will not close to less than this time gap until overtaking exists (M4).
@@ -84,11 +88,14 @@ public final class Tuning {
      */
     public static final double FOLLOW_TIME_GAP = 0.30;
 
-    /** Distance between grid slots in meters. Balance choice close to real staggered grids. */
-    public static final double GRID_SLOT_SPACING = 8.0;
+    /**
+     * Distance between grid slots in meters. Balance choice: real staggered grids put a car every
+     * 8 m, but slots must be at least MIN_SEPARATION apart here.
+     */
+    public static final double GRID_SLOT_SPACING = 16.0;
 
     /** Distance from the start line back to pole position, in meters. Balance choice. */
-    public static final double GRID_FIRST_SLOT_OFFSET = 10.0;
+    public static final double GRID_FIRST_SLOT_OFFSET = 12.0;
 
     /** Sideways offset of grid slots from the centerline, alternating left and right, in meters. */
     public static final double GRID_LATERAL_OFFSET = 2.5;
