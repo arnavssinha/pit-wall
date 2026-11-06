@@ -18,8 +18,14 @@ public final class LinePreview {
     /** Straight pieces per drawn path. */
     private static final int SEGMENTS = 22;
 
-    /** Strokes per path: the chosen line is drawn three times, slightly offset, to look thick. */
-    private static final int LAYERS = 3;
+    /** Strokes per path: lines are drawn several times, a pixel apart, to look thick. */
+    private static final int LAYERS = 4;
+
+    /** Strokes for an option not (yet) chosen. */
+    private static final int OPTION_LAYERS = 2;
+
+    /** Strokes for the rival's line. */
+    private static final int RIVAL_LAYERS = 3;
 
     /** Path slots: the three player options, then the rival. */
     private static final int SLOTS = 4;
@@ -134,7 +140,7 @@ public final class LinePreview {
             if (isChosen) {
                 chosenPlan = plan;
             }
-            drawSlot(slot, race, player, plan, drawing, zoom, isChosen ? LAYERS : 1, false);
+            drawSlot(slot, race, player, plan, drawing, zoom, isChosen ? LAYERS : OPTION_LAYERS, false);
         }
         LineChoice rivalLine = battle.getRivalLine();
         Car rival = battle.getRival();
@@ -142,7 +148,7 @@ public final class LinePreview {
             hideSlot(RIVAL);
         } else {
             LinePlan plan = planFor(race, rival, rivalLine, battle.isRivalLate(), battle.getCorner(), !attacking);
-            drawSlot(RIVAL, race, rival, plan, drawing, zoom, 2, true);
+            drawSlot(RIVAL, race, rival, plan, drawing, zoom, RIVAL_LAYERS, true);
         }
         if (chosenPlan == null && chosen == LineChoice.STAY_BEHIND) {
             hideBrake();
@@ -182,7 +188,7 @@ public final class LinePreview {
      * @param plan the plan
      * @param drawing the drawing converter
      * @param zoom pixels per drawing unit
-     * @param layers how many strokes (1 thin, 3 thick)
+     * @param layers how many strokes (more is thicker)
      * @param dashed true to leave every other piece out
      */
     private void drawSlot(int slot, Race race, Car car, LinePlan plan, TrackDrawing drawing, double zoom,
@@ -238,7 +244,7 @@ public final class LinePreview {
         double center = plan.lateralAt(at, normalLine(race, car, at));
         double half = Tuning.CAR_WIDTH;
         for (int layer = 0; layer < LAYERS; layer++) {
-            double shift = layer - 1;
+            double shift = layer - LAYERS / 2.0;
             brakeMark[layer].setStartPoint(drawing.x(at + shift, center - half) * zoom, -drawing.y(at + shift, center - half) * zoom);
             brakeMark[layer].setEndPoint(drawing.x(at + shift, center + half) * zoom, -drawing.y(at + shift, center + half) * zoom);
             brakeMark[layer].setVisible(true);

@@ -73,6 +73,9 @@ public final class WorldView extends GCompound {
         addSprite(playerSprite);
         for (CarSprite sprite : sprites) {
             add(sprite.getAlert());
+            for (GObject indicator : sprite.getIndicators()) {
+                add(indicator);
+            }
         }
     }
 
@@ -121,14 +124,24 @@ public final class WorldView extends GCompound {
     }
 
     /**
-     * Moves every car sprite to its car's current position and shows the attack warning on one car.
+     * Moves every car sprite to its car's position. Cars near the followed car show a tire-condition
+     * bar; the player's rival in a fight gets a red ring; a car about to attack the player gets the
+     * warning triangle.
      *
-     * @param warned the rival about to attack the player, or null
+     * @param warned the car to mark with the attack warning, or null
+     * @param focus the car the camera follows
      */
-    public void updateCars(Car warned) {
+    public void updateCars(Car warned, Car focus) {
+        Battle battle = race.getBattles().getPlayerBattle();
+        Car rival = battle != null && !battle.isResolved() ? battle.getRival() : null;
+        double lap = race.getTrack().getLapLength();
         for (CarSprite sprite : sprites) {
-            sprite.setAlert(sprite.getCar() == warned);
-            sprite.update(drawing, zoom);
+            Car car = sprite.getCar();
+            double ahead = race.getTrack().wrap(car.getDistance() - focus.getDistance());
+            double near = Math.min(ahead, lap - ahead);
+            boolean detail = car == focus || car.isPlayer() || near < Tuning.DETAIL_RADIUS_METERS;
+            sprite.setAlert(car == warned);
+            sprite.update(drawing, zoom, detail && !car.isRetired(), car == rival);
         }
     }
 

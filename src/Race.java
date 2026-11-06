@@ -218,6 +218,7 @@ public final class Race {
             for (Car car : cars) {
                 car.updateForm(random.nextGaussian() * Tuning.FORM_STEP);
                 car.updateLineBias(random.nextGaussian() * Tuning.LINE_BIAS_STEP, biasRange);
+                checkPuncture(car);
             }
         }
         conditions.update(dt, rain == null ? 0 : rain.intensityAt(time));
@@ -596,6 +597,22 @@ public final class Race {
             car.capSpeed(ahead.getSpeed());
         }
         return move;
+    }
+
+    /**
+     * Once a second: a tire worn past the point of safety may puncture, more likely the more worn it is.
+     *
+     * @param car the car
+     */
+    private void checkPuncture(Car car) {
+        double over = car.getTire().getWear() - Tuning.PUNCTURE_WEAR_START;
+        if (over <= 0 || car.isPunctured() || car.isRetired() || car.isFinished() || car.isInPitLane()) {
+            return;
+        }
+        if (random.nextDouble() < Tuning.PUNCTURE_CHANCE_PER_SECOND * over / Tuning.PUNCTURE_WEAR_SPAN) {
+            car.puncture();
+            addMessage((car.isPlayer() ? "You have" : car.getDriver().getCode() + " has") + " a puncture!", car.isPlayer());
+        }
     }
 
     /**

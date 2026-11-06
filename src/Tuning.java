@@ -755,6 +755,21 @@ public final class Tuning {
     /** Most passes of the side-by-side check per step (more are needed when three cars are squeezed). */
     public static final int SIDE_BY_SIDE_PASSES = 4;
 
+    /** Smallest zoom (as a share of the follow zoom) used to frame the player's fight and its corner. */
+    public static final double FIGHT_MIN_ZOOM = 0.35;
+
+    /** Tire wear above which a tire can puncture. Balance choice. */
+    public static final double PUNCTURE_WEAR_START = 0.95;
+
+    /** Wear beyond the start at which the puncture chance reaches its base rate. */
+    public static final double PUNCTURE_WEAR_SPAN = 0.05;
+
+    /** Puncture chance per second at the base rate (it keeps rising with more wear). Balance choice. */
+    public static final double PUNCTURE_CHANCE_PER_SECOND = 0.01;
+
+    /** Cars within this distance of the followed car show their tire-condition bar, in meters. */
+    public static final double DETAIL_RADIUS_METERS = 300.0;
+
     /** Steepest sideways movement per meter driven (about 17 degrees), so cars steer instead of sliding. */
     public static final double MAX_LATERAL_RATE = 0.3;
 

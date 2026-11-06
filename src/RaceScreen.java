@@ -138,7 +138,8 @@ public final class RaceScreen implements Screen {
         program.add(radio);
 
         prompt = new BattlePrompt();
-        prompt.setLocation(TimingTower.WIDTH + 24, HudPanel.TOP_BAR_BOTTOM + 8);
+        prompt.setLocation(TimingTower.WIDTH + 24, viewBottom - BattlePrompt.HEIGHT - 6);
+        camera.setPanelReserve(BattlePrompt.HEIGHT + 12);
 
         debug = new DebugOverlay();
         debug.setLocation(width - 308, 8);
@@ -310,8 +311,8 @@ public final class RaceScreen implements Screen {
      */
     private void render() {
         Battle battle = race.getBattles().getPlayerBattle();
-        camera.update(followed, battle != null && !battle.isResolved());
-        world.updateCars(warnedRival());
+        camera.update(followed, battle);
+        world.updateCars(warnedRival(), followed);
         world.updatePreview();
         updatePrompt();
         radio.update(race.getMessages());

@@ -24,7 +24,7 @@ public final class BattlePrompt extends GCompound {
     public static final double WIDTH = 600;
 
     /** Panel height in pixels. */
-    public static final double HEIGHT = 262;
+    public static final double HEIGHT = 232;
 
     /** Width of the countdown bar. */
     private static final double BAR_WIDTH = WIDTH - 24;
@@ -36,10 +36,10 @@ public final class BattlePrompt extends GCompound {
     private static final int FACTORS = 6;
 
     /** Top of the factor rows. */
-    private static final double FACTOR_TOP = 132;
+    private static final double FACTOR_TOP = 128;
 
     /** Space between factor rows. */
-    private static final double FACTOR_STEP = 17;
+    private static final double FACTOR_STEP = 15;
 
     /** Speed difference (km/h) below which the straight-line speed counts as even. */
     private static final double EVEN_SPEED = 3;
@@ -96,16 +96,16 @@ public final class BattlePrompt extends GCompound {
         late = new UiButton("L  Late braking: off", 220, 26);
         add(late, 12, 94);
         GLabel hint = text(244, 112, Palette.SMALL, Palette.TEXT_DIM);
-        hint.setLabel("Colored lines on the track show each choice; red dashes are the rival.");
+        hint.setLabel("Colored lines on the track = your choices. Red dashes = rival.");
         for (int i = 0; i < FACTORS; i++) {
             factors[i] = text(12, FACTOR_TOP + i * FACTOR_STEP, Palette.SMALL, Palette.TEXT);
         }
-        countdown = new GRect(12, HEIGHT - 32, BAR_WIDTH, 5);
+        countdown = new GRect(12, HEIGHT - 26, BAR_WIDTH, 5);
         countdown.setFilled(true);
         countdown.setFillColor(Palette.DANGER);
         countdown.setColor(Palette.DANGER);
         add(countdown);
-        footer = text(12, HEIGHT - 10, Palette.HUD, Palette.PLAYER);
+        footer = text(12, HEIGHT - 7, Palette.HUD, Palette.PLAYER);
     }
 
     /**
@@ -189,10 +189,12 @@ public final class BattlePrompt extends GCompound {
         double gapMeters = race.trackGap(attacker, defender);
         double gapSeconds = gapMeters / Math.max(1, attacker.getSpeed());
         boolean alongside = gapMeters < Tuning.MIN_SEPARATION;
-        String gapText = alongside
+        boolean attackerAhead = gapMeters > race.getTrack().getLapLength() / 2;
+        String gapText = attackerAhead ? (attacking ? "Gap: you are ahead now" : "Gap: " + code + " is ahead now")
+                : alongside
                 ? String.format(Locale.ROOT, "Gap: alongside (%.0f%% level)", 100 * (1 - gapMeters / Tuning.MIN_SEPARATION))
                 : String.format(Locale.ROOT, "Gap: %.2f s (%.0f m). The attacker must be alongside by turn-in.", gapSeconds, gapMeters);
-        boolean closeForAttack = gapSeconds < Tuning.DEFAULT_ATTACK_GAP;
+        boolean closeForAttack = attackerAhead || gapSeconds < Tuning.DEFAULT_ATTACK_GAP;
         row(0, gapText, attacking == closeForAttack ? Palette.GOOD : Palette.DANGER);
 
         double mySpeed = player.getTopSpeed() * 3.6;

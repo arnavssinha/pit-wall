@@ -64,7 +64,8 @@ public final class PitStrategyPlanner {
     }
 
     /**
-     * Calls a stop for a car when its plan says so, or early when its tires are nearly gone.
+     * Calls a stop for a car when its plan says so, early when its tires are nearly gone, and at once
+     * after a puncture.
      * Stops planned for the last lap or later are dropped, because the race ends first.
      *
      * @param car the car
@@ -81,6 +82,15 @@ public final class PitStrategyPlanner {
         }
         PitPlan plan = car.getPlan();
         PitStop next = plan.nextStop();
+        if (car.isPunctured() && currentLap < raceLaps) {
+            Compound fresh = next != null ? next.getCompound()
+                    : car.getTire().getCompound() == Compound.MEDIUM ? Compound.HARD : Compound.MEDIUM;
+            car.requestPit(1, fresh);
+            if (car.isPlayer()) {
+                race.addMessage("Puncture! Box, box: " + fresh.getDisplayName() + "s are ready.", true);
+            }
+            return;
+        }
         while (next != null && next.getLap() >= raceLaps) {
             plan.removeNextStop();
             next = plan.nextStop();
