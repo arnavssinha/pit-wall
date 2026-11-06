@@ -75,6 +75,7 @@ ui GaugeBar.java
 ui GaugePanel.java
 ui UiButton.java
 ui BattlePrompt.java
+ui LinePreview.java
 ui RadioFeed.java
 ui Screen.java
 ui ScreenManager.java

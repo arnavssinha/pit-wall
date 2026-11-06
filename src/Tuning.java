@@ -75,11 +75,8 @@ public final class Tuning {
      */
     public static final double MIN_SPEED_RADIUS = 30.0;
 
-    /** Most smoothing passes used to round off corners tighter than MIN_CORNER_RADIUS. */
+    /** Most passes used to round off corners tighter than MIN_CORNER_RADIUS. */
     public static final int CORNER_EASING_MAX_PASSES = 4000;
-
-    /** Neighbouring samples on each side eased together with a too-tight one. */
-    public static final int CORNER_EASING_REACH = 2;
 
     /**
      * Track width in meters of the game world. The game world is stylized: the lap keeps its real
@@ -184,39 +181,6 @@ public final class Tuning {
     /** A braking speed drop this large, in m/s, makes a corner as easy to pass at as it gets. */
     public static final double CORNER_EASY_SPEED_DROP = 60.0;
 
-    /** Constant term of the pass score. Balance choice. */
-    public static final double PASS_BASE_SCORE = -0.5;
-
-    /** Pass score per unit of speed-scale advantage (0.01 = 1 percent faster gives 0.4). Balance choice. */
-    public static final double PASS_PACE_WEIGHT = 40.0;
-
-    /** Pass score per unit of grip advantage. Balance choice. */
-    public static final double PASS_TIRE_WEIGHT = 15.0;
-
-    /** Pass score for being right behind rather than at the edge of the battle gap. Balance choice. */
-    public static final double PASS_CLOSENESS_WEIGHT = 1.0;
-
-    /** Pass score bonus for choosing Attack. Balance choice. */
-    public static final double PASS_ATTACK_BONUS = 1.0;
-
-    /** Pass score bonus when the attacker spends ERS. Balance choice. */
-    public static final double PASS_ERS_BONUS = 0.7;
-
-    /** Pass score lost when the defender spends ERS. Balance choice. */
-    public static final double PASS_ERS_DEFENCE = 0.5;
-
-    /** Pass score lost when the defender chooses Defend. Balance choice. */
-    public static final double PASS_DEFEND_BONUS = 1.6;
-
-    /** Pass score lost per unit of track overtaking difficulty. Balance choice. */
-    public static final double PASS_TRACK_WEIGHT = 2.5;
-
-    /** Pass score lost per unit of corner difficulty. Balance choice. */
-    public static final double PASS_CORNER_WEIGHT = 1.5;
-
-    /** Steepness k of the logistic curve that turns the pass score into a probability. Balance choice. */
-    public static final double PASS_LOGISTIC_K = 1.4;
-
     /** Base chance an Attack goes wrong. Balance choice. */
     public static final double RISK_BASE = 0.04;
 
@@ -232,23 +196,8 @@ public final class Tuning {
     /** Extra risk at a fully wet track. */
     public static final double RISK_PER_WETNESS = 0.25;
 
-    /** Extra risk per unit of aggression above the middle (0.5). */
-    public static final double RISK_PER_AGGRESSION = 0.1;
-
     /** Highest attack risk. */
     public static final double RISK_MAX = 0.6;
-
-    /** Share of incidents that are lock-ups. */
-    public static final double INCIDENT_LOCKUP_SHARE = 0.5;
-
-    /** Share of incidents that are running wide (the rest are contact). */
-    public static final double INCIDENT_RUN_WIDE_SHARE = 0.35;
-
-    /** Time lost by a lock-up, in seconds. */
-    public static final double LOCKUP_TIME_LOSS = 0.4;
-
-    /** Time lost by running wide, in seconds. */
-    public static final double RUN_WIDE_TIME_LOSS = 1.2;
 
     /** Time lost by the attacker in contact, in seconds. */
     public static final double CONTACT_ATTACKER_LOSS = 1.5;
@@ -256,47 +205,14 @@ public final class Tuning {
     /** Time lost by the defender in contact, in seconds. */
     public static final double CONTACT_DEFENDER_LOSS = 0.8;
 
-    /** Time a defender loses by taking the defensive line, attacked or not, in seconds. */
-    public static final double DEFEND_TIME_COST = 0.15;
-
-    /** Time an attacker loses when an attempted move fails cleanly, in seconds. */
-    public static final double FAILED_ATTACK_TIME_COST = 0.1;
-
-    /** Brake heat added by a late-braking attack, in Celsius. */
-    public static final double ATTACK_BRAKE_HEAT = 120.0;
-
-    /** Tire wear added by attacking. */
-    public static final double ATTACK_TIRE_WEAR = 0.01;
-
-    /** Tire wear added by defending. */
-    public static final double DEFEND_TIRE_WEAR = 0.004;
-
-    /** Battery charge spent when ERS is used in a battle. */
-    public static final double ERS_BATTLE_COST = 0.08;
-
     /** Computer drivers use ERS in a battle while above this charge. */
     public static final double AI_BATTLE_ERS_ABOVE = 0.3;
 
     /** Speed fraction a car drives at while serving a time loss. */
     public static final double PENALTY_SPEED_FRACTION = 0.7;
 
-    /** Sideways offset of the attacker while passing, in meters. */
-    public static final double PASS_LATERAL = 12.0;
-
-    /** Sideways offset of the defender while being passed, in meters (to the other side). */
-    public static final double DEFENDER_LATERAL = 5.0;
-
     /** Sideways distance at which two cars no longer touch (car width plus a little), in meters. */
     public static final double LATERAL_CLEARANCE = 8.6;
-
-    /** Extra speed fraction for the attacker during a pass. */
-    public static final double PASS_SPEED_BONUS = 0.04;
-
-    /** The attacker closes on the defender at least this fast during a pass, in m/s. */
-    public static final double PASS_MIN_CLOSING = 8.0;
-
-    /** Speed fraction the defender gives up while being passed. */
-    public static final double PASS_DEFENDER_SLOW = 0.04;
 
     /** Lowest aggression drawn for a computer driver (narrow band, brief Section 3.11). */
     public static final double AI_AGGRESSION_MIN = 0.4;
@@ -307,17 +223,8 @@ public final class Tuning {
     /** Under this gap, default policies attack. */
     public static final double DEFAULT_ATTACK_GAP = 0.6;
 
-    /** Under this gap, default policies defend. */
-    public static final double DEFAULT_DEFEND_GAP = 0.5;
-
     /** Attack chance for a computer driver is its aggression times this, plus the bonuses below. */
     public static final double AI_ATTACK_SCALE = 0.5;
-
-    /** Extra attack chance for a computer driver right behind. */
-    public static final double AI_CLOSE_ATTACK_BONUS = 0.25;
-
-    /** Extra attack chance per unit of tire-wear advantage. */
-    public static final double AI_TIRE_EDGE_WEIGHT = 1.5;
 
     /** Attack chance removed when the attacker's tires are past the cliff. */
     public static final double AI_WORN_TIRE_CAUTION = 0.3;
@@ -768,7 +675,7 @@ public final class Tuning {
     public static final double PUNCTURE_CHANCE_PER_SECOND = 0.01;
 
     /** Cars within this distance of the followed car show their tire-condition bar, in meters. */
-    public static final double DETAIL_RADIUS_METERS = 300.0;
+    public static final double DETAIL_RADIUS_METERS = 150.0;
 
     /** Steepest sideways movement per meter driven (about 17 degrees), so cars steer instead of sliding. */
     public static final double MAX_LATERAL_RATE = 0.3;
@@ -788,42 +695,11 @@ public final class Tuning {
     /** Speed fraction a failed attacker gives up while dropping back behind the defender. */
     public static final double ABORT_SLOWDOWN = 0.12;
 
-    /** How far an attacker pulls out of the slipstream, in meters from the centerline. */
-    public static final double PULL_OUT_LATERAL = 15.0;
-
-    /** How far a covering defender moves toward the inside, in meters from the centerline. */
-    public static final double COVER_LATERAL = 12.0;
-
-    /** Sideways speed of a defender moving across to cover, in m/s. */
-    public static final double COVER_SPEED = 11.0;
-
-    /** Pass score added per unit of overlap (from -1, a gap behind, to +1, a gap ahead). Balance choice. */
-    public static final double PASS_OVERLAP_WEIGHT = 1.5;
-
-    /** Pass score bonus for going around the outside (smaller than Attack's). Balance choice. */
-    public static final double PASS_OUTSIDE_BONUS = 0.5;
-
-    /** Share of the corner difficulty an outside move still suffers. */
-    public static final double OUTSIDE_CORNER_SHARE = 0.5;
-
-    /** Share of the defender's cover bonus that still applies against an outside move. */
-    public static final double OUTSIDE_DEFEND_SHARE = 0.35;
-
-    /** Share of the normal attack risk taken by an outside move. */
-    public static final double OUTSIDE_RISK_SHARE = 0.4;
-
     /** Chance a computer attacker goes around the outside instead of the inside. */
     public static final double AI_OUTSIDE_CHANCE = 0.25;
 
     /** Computer drivers fighting wheel to wheel deploy ERS while above this charge. */
     public static final double AI_FIGHT_ERS_ABOVE = 0.1;
-
-    /** An attacker pulls out of the slipstream once this close behind, in seconds. */
-    public static final double PULL_OUT_GAP_SECONDS = 0.4;
-
-    /** An attacker pulls out at the latest this long before the braking point, in seconds. */
-    public static final double PULL_OUT_BEFORE_BRAKING_SECONDS = 1.2;
-
 
     /** Largest swing of a car's form (its pace from moment to moment) above or below its race pace. */
     public static final double FORM_RANGE = 0.008;

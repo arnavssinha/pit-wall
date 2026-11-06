@@ -311,65 +311,72 @@ public final class Track {
 
     /**
      * Rounds off any corner tighter than the minimum radius, in place. The drawn track is much wider
-     * than a real one, so a real hairpin would fold the inside edge over itself; easing only the
-     * too-tight points (and a few neighbours) turns it into a smooth, wider corner and leaves the
-     * rest of the layout alone. Each pass moves a flagged point halfway toward the midpoint of its
-     * neighbours, which is a small local blur.
+     * than a real one, so a real hairpin would fold the inside edge over itself. The loop is treated as
+     * a chain of equal steps with a turn between each pair; any turn sharper than the limit gives its
+     * extra turning to the steps either side, so the corner turns through the same total angle over a
+     * longer, rounder arc. A hairpin stays a hairpin and a U-shaped section keeps its depth (smoothing
+     * the points instead would slowly flatten it). The chain is then rebuilt and its small closing
+     * error is spread evenly around the lap.
      *
      * @param points evenly spaced closed loop, changed in place
      * @param maxCurvature largest allowed curvature in 1 per meter
      */
     private static void limitCurvature(List<double[]> points, double maxCurvature) {
         int n = points.size();
-        boolean[] flagged = new boolean[n];
+        double[] heading = new double[n];
+        double step = 0;
+        for (int i = 0; i < n; i++) {
+            double[] a = points.get(i);
+            double[] b = points.get((i + 1) % n);
+            heading[i] = Math.atan2(b[1] - a[1], b[0] - a[0]);
+            step += Math.hypot(b[0] - a[0], b[1] - a[1]);
+        }
+        step /= n;
+        double[] turn = new double[n];
+        for (int i = 0; i < n; i++) {
+            turn[i] = angleDifference(heading[i], heading[Math.floorMod(i - 1, n)]);
+        }
+        double maxTurn = maxCurvature * step;
+        boolean changed = false;
         for (int pass = 0; pass < Tuning.CORNER_EASING_MAX_PASSES; pass++) {
             boolean any = false;
             for (int i = 0; i < n; i++) {
-                flagged[i] = false;
-            }
-            for (int i = 0; i < n; i++) {
-                if (curvatureAt(points, i) > maxCurvature) {
+                double excess = Math.abs(turn[i]) - maxTurn;
+                if (excess > 1e-9) {
+                    double sign = Math.signum(turn[i]);
+                    turn[i] -= sign * excess;
+                    turn[Math.floorMod(i - 1, n)] += sign * excess / 2;
+                    turn[(i + 1) % n] += sign * excess / 2;
                     any = true;
-                    for (int j = -Tuning.CORNER_EASING_REACH; j <= Tuning.CORNER_EASING_REACH; j++) {
-                        flagged[Math.floorMod(i + j, n)] = true;
-                    }
                 }
             }
             if (!any) {
-                return;
+                break;
             }
-            for (int i = 0; i < n; i++) {
-                if (flagged[i]) {
-                    double[] p = points.get(i);
-                    double[] a = points.get(Math.floorMod(i - 1, n));
-                    double[] b = points.get((i + 1) % n);
-                    p[0] += 0.5 * ((a[0] + b[0]) / 2 - p[0]);
-                    p[1] += 0.5 * ((a[1] + b[1]) / 2 - p[1]);
-                }
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+        double[][] rebuilt = new double[n + 1][2];
+        rebuilt[0][0] = points.get(0)[0];
+        rebuilt[0][1] = points.get(0)[1];
+        double h = heading[0];
+        for (int i = 0; i < n; i++) {
+            if (i > 0) {
+                h += turn[i];
             }
+            rebuilt[i + 1][0] = rebuilt[i][0] + step * Math.cos(h);
+            rebuilt[i + 1][1] = rebuilt[i][1] + step * Math.sin(h);
+        }
+        double ex = rebuilt[n][0] - rebuilt[0][0];
+        double ey = rebuilt[n][1] - rebuilt[0][1];
+        for (int i = 0; i < n; i++) {
+            points.get(i)[0] = rebuilt[i][0] - ex * i / n;
+            points.get(i)[1] = rebuilt[i][1] - ey * i / n;
         }
     }
 
-    /**
-     * Returns the size of the curvature through a point and its two neighbours (one over the radius
-     * of the circle through all three).
-     *
-     * @param points the closed loop
-     * @param i index of the middle point
-     * @return curvature in 1 per meter, never negative
-     */
-    private static double curvatureAt(List<double[]> points, int i) {
-        int n = points.size();
-        double[] a = points.get(Math.floorMod(i - 1, n));
-        double[] b = points.get(i);
-        double[] c = points.get((i + 1) % n);
-        double ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        double bc = Math.hypot(c[0] - b[0], c[1] - b[1]);
-        double ca = Math.hypot(a[0] - c[0], a[1] - c[1]);
-        double cross = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
-        double product = ab * bc * ca;
-        return product == 0 ? 0 : 2 * cross / product;
-    }
 
     /**
      * Scales the raw loop about the origin so its perimeter equals the official lap length.

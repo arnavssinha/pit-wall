@@ -6,19 +6,20 @@ package ui <<Frame>> {
     {static} 4 constants
   }
   class BattlePrompt {
+    -frame : GRect
     -headline : GLabel
-    -details : GLabel
-    -footer : GLabel
-    -attack : UiButton
-    -outside : UiButton
-    -defend : UiButton
-    -hold : UiButton
+    -cornerLine : GLabel
+    -choices : UiButton[]
+    -late : UiButton
+    -factors : GLabel[]
     -countdown : GRect
-    {static} 4 constants
+    -footer : GLabel
+    {static} 12 constants
     +BattlePrompt()
     +showOpen(Battle, Race, double) : void
     +showResult(Battle) : void
-    +stanceAt(double, double) : Stance
+    +choiceAt(double, double) : LineChoice
+    +isLateBrakeAt(double, double) : boolean
   }
   class ButtonGroup {
     -buttons : List<UiButton>
@@ -35,11 +36,16 @@ package ui <<Frame>> {
     -overviewZoom : double
     -overview : boolean
     -followBlend : double
+    -fightBlend : double
+    -viewWidth : double
+    -viewHeight : double
+    -panelReserve : double
     {static} 2 constants
     +Camera(WorldView, TrackDrawing, double, double, double, double)
     +toggleOverview() : void
     +isOverview() : boolean
-    +update(Car, boolean) : void
+    +setPanelReserve(double) : void
+    +update(Car, Battle) : void
   }
   class CarSprite {
     -car : Car
@@ -49,17 +55,25 @@ package ui <<Frame>> {
     -rearWing : GPolygon
     -wingOpen : boolean
     -alert : GPolygon
+    -tires : GPolygon[]
+    -shownCompound : Compound
+    -wearBack : GRect
+    -wearBar : GRect
+    -smoke : GOval
+    -rivalRing : GOval
+    -frames : int
     -appliedDegrees : double
     -appliedEnlargement : double
-    {static} 4 constants
+    {static} 9 constants
     +CarSprite(Car, boolean)
+    +getIndicators() : List<GObject>
     +getGlow() : GPolygon
     +getAlert() : GPolygon
     +setAlert(boolean) : void
     +getParts() : List<GPolygon>
     +getRing() : GOval
     +getCar() : Car
-    +update(TrackDrawing, double) : void
+    +update(TrackDrawing, double, boolean, boolean) : void
   }
   class DebugOverlay {
     -line1 : GLabel
@@ -153,6 +167,19 @@ package ui <<Frame>> {
     {static} 5 constants
     +addSeries(double[], Color, String) : void
   }
+  class LinePreview {
+    -lines : GLine[][][]
+    -dots : GOval[]
+    -keys : GLabel[]
+    -brakeMark : GLine[]
+    -brakeLabel : GLabel
+    -objects : List<GObject>
+    -shown : boolean
+    {static} 9 constants
+    +LinePreview()
+    +getObjects() : List<GObject>
+    +update(Race, TrackDrawing, double) : void
+  }
   class MenuScreen {
     -manager : ScreenManager
     -buttons : ButtonGroup
@@ -172,7 +199,8 @@ package ui <<Frame>> {
     +update() : void
   }
   class Palette {
-    {static} 37 constants
+    {static} 42 constants
+    +lineColor(LineChoice) : Color
     +label(String, Font, Color) : GLabel
     +panel(double, double) : GRect
     +background(double, double) : GRect
@@ -365,9 +393,12 @@ package ui <<Frame>> {
     -box : GRect
     -label : GLabel
     -enabled : boolean
+    -stripe : GRect
+    -accent : Color
     {static} 1 constants
     +UiButton(String, double, double)
     +setLabel(String) : void
+    +setAccent(Color) : void
     +setHighlighted(boolean) : void
     +setEnabled(boolean) : void
     +isEnabled() : boolean
@@ -387,11 +418,14 @@ package ui <<Frame>> {
     -drawing : TrackDrawing
     -sprites : List<CarSprite>
     -zoom : double
+    -race : Race
+    -preview : LinePreview
     {static} 4 constants
     +WorldView(Race, TrackDrawing)
     +setZoom(double) : void
     +getZoom() : double
-    +updateCars(Car) : void
+    +updatePreview() : void
+    +updateCars(Car, Car) : void
     +toPixelX(double) : double
     +toPixelY(double) : double
   }
@@ -401,41 +435,55 @@ package sim <<Frame>> {
     -attacker : Car
     -defender : Car
     -corner : Corner
-    -resolveAt : double
-    -gapSeconds : double
     -openedAt : double
+    -gapSeconds : double
     -promptsPlayer : boolean
-    -attackerStance : Stance
-    -defenderStance : Stance
+    -attackerLine : LineChoice
+    -attackerLate : boolean
+    -defenderLine : LineChoice
+    -defenderLate : boolean
+    -playerDecided : boolean
     -playerLocked : boolean
-    -attackerEngaged : boolean
-    -pulledOut : boolean
-    -defenderEngaged : boolean
+    -switchedSides : boolean
+    -passedBeforeBraking : boolean
+    -lockUp : boolean
+    -contact : boolean
     -outcome : BattleOutcome
     -message : String
-    +choosePlayerStance(Stance) : void
-    +lockPlayerStance() : void
-    +getPlayerStance() : Stance
+    +Battle(Car, Car, Corner, double, double, boolean)
+    +choosePlayerLine(LineChoice) : void
+    +togglePlayerLateBrake() : void
+    +markPlayerDecided() : void
+    +lockPlayer() : void
+    +isPlayerAttacking() : boolean
+    +getPlayerLine() : LineChoice
+    +isPlayerLate() : boolean
     +getRival() : Car
+    +getRivalLine() : LineChoice
+    +isRivalLate() : boolean
+    +setAttackerChoice(LineChoice, boolean) : void
+    +setDefenderChoice(LineChoice, boolean) : void
     +finish(BattleOutcome, String) : void
-    +markAttackerEngaged() : void
-    +isAttackerEngaged() : boolean
-    +markPulledOut() : void
-    +isPulledOut() : boolean
-    +markDefenderEngaged() : void
-    +isDefenderEngaged() : boolean
-    +setAttackerStance(Stance) : void
-    +setDefenderStance(Stance) : void
+    +markSwitchedSides() : void
+    +hasSwitchedSides() : boolean
+    +markPassedBeforeBraking() : void
+    +wasPassedBeforeBraking() : boolean
+    +markLockUp() : void
+    +hadLockUp() : boolean
+    +markContact() : void
+    +hadContact() : boolean
     +getAttacker() : Car
     +getDefender() : Car
     +getCorner() : Corner
-    +getResolveAt() : double
     +getGapSeconds() : double
     +getOpenedAt() : double
     +promptsPlayer() : boolean
+    +isPlayerDecided() : boolean
     +isPlayerLocked() : boolean
-    +getAttackerStance() : Stance
-    +getDefenderStance() : Stance
+    +getAttackerLine() : LineChoice
+    +isAttackerLate() : boolean
+    +getDefenderLine() : LineChoice
+    +isDefenderLate() : boolean
     +getOutcome() : BattleOutcome
     +isResolved() : boolean
     +getMessage() : String
@@ -444,27 +492,35 @@ package sim <<Frame>> {
     -race : Race
     -random : Random
     -open : List<Battle>
+    -ruled : HashSet<Long>
+    -lastDistance : double[]
     -playerBattle : Battle
-    -preselected : Stance
+    -preselected : LineChoice
     -lastPromptTime : double
+    -lastPlayerPassTime : double
+    -attackRequested : boolean
     -attempts : int
     -passes : int
     +BattleManager(Race, Random)
     +beforeMove() : void
     +afterMove() : void
+    +hasStraightEdge(Car) : boolean
     +cancelAll() : void
-    +choosePlayerStance(Stance) : void
+    +choosePlayerLine(LineChoice) : void
+    +togglePlayerLateBrake() : void
+    +requestPlayerAttack() : void
     +getPlayerBattle() : Battle
     +clearPlayerBattle() : void
-    +getPreselected() : Stance
+    +getPreselected() : LineChoice
     +getAttempts() : int
     +getPasses() : int
   }
   enum BattleOutcome {
   }
   class BattleResolver {
-    +passProbability(double) : double
-    +attackRisk(Car, double, Stance) : double
+    +claim(Car, Car, Corner, double, double, double) : double
+    +lockUpChance(Car, double) : double
+    +riskWord(Car, double) : String
     +describe(Battle, BattleOutcome) : String
   }
   class Brakes {
@@ -499,13 +555,16 @@ package sim <<Frame>> {
     -onLine : boolean
     -lateralRate : double
     -aggression : double
-    -intent : Stance
+    -intent : LineChoice
     -intentKey : int
     -lastBattleKey : int
-    -passPartner : Car
-    -passAttacker : boolean
-    -passGranted : boolean
-    -passAborting : boolean
+    -linePlan : LinePlan
+    -yieldTo : Car
+    -yieldSince : double
+    -lineBias : double
+    -launchDelay : double
+    -ersStyle : double
+    -punctured : boolean
     -timePenalty : double
     -lateralSpeed : double
     -plan : PitPlan
@@ -541,15 +600,8 @@ package sim <<Frame>> {
     +isFollowingLine() : boolean
     +isOnLine() : boolean
     +getLateralRate() : double
-    +beginPass(Car, boolean, double) : void
-    +pairWith(Car) : void
-    +grantPass() : void
-    +abortPass() : void
-    +isPassGranted() : boolean
-    +isPassAborting() : boolean
     +setLateralTarget(double, double) : void
     +getLateralTarget() : double
-    +endPass() : void
     +requestPit(int, Compound) : void
     +cancelPit() : void
     +skipPitEntry() : void
@@ -573,12 +625,23 @@ package sim <<Frame>> {
     +disqualify() : void
     +isDisqualified() : boolean
     +addTimePenalty(double) : void
-    +getPassPartner() : Car
-    +isPassAttacker() : boolean
+    +setLinePlan(LinePlan) : void
+    +getLinePlan() : LinePlan
+    +setYieldTo(Car, double) : void
+    +getYieldSince() : double
+    +getYieldTo() : Car
+    +updateLineBias(double, double) : void
+    +getLineBias() : double
+    +setLaunchDelay(double) : void
+    +getLaunchDelay() : double
+    +setErsStyle(double) : void
+    +getErsStyle() : double
+    +puncture() : void
+    +isPunctured() : boolean
     +setAggression(double) : void
     +getAggression() : double
-    +setIntent(Stance, int) : void
-    +getIntent() : Stance
+    +setIntent(LineChoice, int) : void
+    +getIntent() : LineChoice
     +getIntentKey() : int
     +setLastBattleKey(int) : void
     +getLastBattleKey() : int
@@ -709,6 +772,37 @@ package sim <<Frame>> {
     +meanLoadPerMeter(Track, double) : double
     +cleanLapSeconds(Track, double) : double
   }
+  enum LineChoice {
+    -displayName : String
+    +getDisplayName() : String
+    +leavesLine() : boolean
+  }
+  class LinePlan {
+    -choice : LineChoice
+    -corner : Corner
+    -lateBrake : boolean
+    -attacker : boolean
+    -moveStart : double
+    -moveEnd : double
+    -brakeAt : double
+    -apexAt : double
+    -endAt : double
+    -lane : double
+    -lockedUp : boolean
+    +lateralAt(double, double) : double
+    +brakeShift(double) : double
+    +speedFactor(double) : double
+    +lockUp() : void
+    +isLockedUp() : boolean
+    +isDone(double) : boolean
+    +getChoice() : LineChoice
+    +getCorner() : Corner
+    +isLateBrake() : boolean
+    +isAttacker() : boolean
+    +getBrakeAt() : double
+    +getApexAt() : double
+    +getEndAt() : double
+  }
   class PitLane {
     -race : Race
     -random : Random
@@ -826,6 +920,7 @@ package sim <<Frame>> {
     +getRain() : RainEvent
     +getPitLane() : PitLane
     +getSafetyCar() : SafetyCar
+    +personalLine(Car) : double
     +isDrsAllowed() : boolean
     +getDrsZones() : DrsZones
     +hasCarAlongside(Car, boolean) : boolean
@@ -924,7 +1019,7 @@ package sim <<Frame>> {
   class RacingLine {
     -offset : double[]
     -curvature : double[]
-    +RacingLine(double[], double[], double[], double)
+    +RacingLine(double[], double[], double[], double, double)
     +offsetAt(int) : double
     +curvatureAt(int) : double
   }
@@ -967,10 +1062,6 @@ package sim <<Frame>> {
     +cornerLimitAt(int) : double
     +getGripScale() : double
   }
-  enum Stance {
-    -displayName : String
-    +getDisplayName() : String
-  }
   enum StrategyPreset {
     -displayName : String
     -stopFractions : double[]
@@ -1008,6 +1099,7 @@ package sim <<Frame>> {
     -samples : ArrayList<TrackSample>
     -spacing : double
     -racingLine : RacingLine
+    -speedLine : RacingLine
     -minX : double
     -maxX : double
     -minY : double
@@ -1101,18 +1193,22 @@ package sim <<Frame>> {
     +getCurvature() : double
   }
   class Tuning {
-    {static} 229 constants
+    {static} 259 constants
   }
 }
 package ai <<Frame>> {
   class AiDriver {
     +choosePush(Car) : PushLevel
-    +wantsDeploy(Car) : boolean
+    +wantsDeploy(Car, double) : boolean
     +usesErsInBattle(Car) : boolean
+    +isFighting(Car) : boolean
   }
-  class DefaultStancePolicy {
-    +attackerStance(Car, Car, double, Random) : Stance
-    +playerDefault(Car, double, boolean) : Stance
+  class LineChoicePolicy {
+    +edge(Car, Car, double) : double
+    +attackerLine(Car, Car, double, Random) : LineChoice
+    +lateBrake(Car, LineChoice, Random) : boolean
+    +defenderLine(Car, LineChoice, Random) : LineChoice
+    +playerDefault(Car, double, boolean) : LineChoice
   }
   class PitStrategyPlanner {
     +choosePlan(Random, int) : PitPlan
@@ -1229,11 +1325,11 @@ package lab <<Frame>> {
 GCompound <|-- BarChart
 Battle --> Car
 Battle --> Corner
-Battle --> Stance
+Battle --> LineChoice
 Battle --> BattleOutcome
 BattleManager --> Race
 BattleManager --> Battle
-BattleManager --> Stance
+BattleManager --> LineChoice
 GCompound <|-- BattlePrompt
 BattlePrompt --> UiButton
 ButtonGroup --> UiButton
@@ -1244,11 +1340,13 @@ Car --> Brakes
 Car --> Ers
 Car --> Tire
 Car --> PushLevel
-Car --> Stance
+Car --> LineChoice
+Car --> LinePlan
 Car --> PitPlan
 Car --> PitPhase
 Car --> Compound
 CarSprite --> Car
+CarSprite --> Compound
 GCompound <|-- DebugOverlay
 Driver --> Team
 DrsZones --> Track
@@ -1271,6 +1369,8 @@ LabScreen --> StrategyLab
 LabScreen --> ButtonGroup
 LabScreen --> LabResult
 GCompound <|-- LineChart
+LinePlan --> LineChoice
+LinePlan --> Corner
 Screen <|.. MenuScreen
 MenuScreen --> ScreenManager
 MenuScreen --> ButtonGroup
@@ -1365,4 +1465,6 @@ GCompound <|-- WeatherOverlay
 GCompound <|-- WorldView
 WorldView --> TrackDrawing
 WorldView --> CarSprite
+WorldView --> Race
+WorldView --> LinePreview
 @enduml

@@ -293,3 +293,54 @@ weird; add DRS; make Conserve/Balanced/Push more extreme; the team radio spams; 
 
 **Tests:** 34 (new: DRS zones and rules). The pit-stop test accepts a box on either side of the
 line; the compound-rule test uses a seed where the player does not retire; Monza is loaded once.
+
+## Feedback pass 3: road-decided overtaking, fight panels, Sao Paulo, natural corner speeds (2026-11-06)
+
+Owner feedback: overtakes unpredictable with speed differences "out of nowhere"; the field bunches up and the
+midfield gets stuck; add Sao Paulo (from an outline picture); defence and attack need clear visual feedback
+(both cars' lines, colored options, grip); separate attack and defence; multi-car passes, DRS passes, late
+braking; cars slow too much in places; AI drivers all identical; more car indicators (grip/wear, punctures,
+compound). Owner choices: slow motion while choosing, show factors but no percentages, prompts plus an attack
+key, ignore deliverables for now.
+
+**Research used:** F1 overtaking practice (out-braking down the inside, the outside line needs the car to be
+level, DRS/slipstream passes on straights, switchbacks after a defender covers the inside); F1 Manager's
+colored tire-wear blocks with a "danger" band and pace modes; Motorsport Manager's red wear zone and the common
+complaint that abstract circles do not show who is alongside; Gran Turismo's tire colors.
+
+**Done**
+- Overtaking rebuilt (`LineChoice`, `LinePlan`, `Battle`, `BattleManager`, `BattleResolver`, `LineChoicePolicy`).
+  The old hidden dice roll at the braking point and the forced "pass speed" are gone. Each fight choice is a
+  real path the car drives (move across to a lane before braking, hold it to the apex, rejoin on the exit),
+  late braking shifts the braking point by 25 m with a lock-up risk, an Inside line costs exit speed and an
+  Outside line costs entry speed. Any two cars may run side by side when there is room. Who gets a corner is
+  settled at turn-in by a claim built from visible factors: how far alongside, inside or outside, grip, late
+  braking, lock-ups, track difficulty, small noise; close calls can end in contact (and a puncture). The loser
+  lifts and tucks in behind (never below 60% pace, never longer than 6 s, never a circular give-way). Cars that
+  are not attacking follow the car ahead instead of drifting alongside; a "Stay behind" car drops back.
+  Result: 10 to 40 real passes per AI race, multi-car passes on straights, switchbacks, lock-ups.
+- Dirty air: up to 4% corner speed lost within a second behind another car; the tow only applies when in its wake.
+- Side-by-side guard: runs up to 4 passes, moves back the car that moved, stays inside the track edges.
+  0 overlaps in 8 AI races on both tracks.
+- Fight UI: separate ATTACK (red) and DEFEND (blue) panels, buttons color-matched to lines drawn on the track
+  (`LinePreview`: the exact LinePlan paths, rival red dashed, a BRAKE / BRAKE LATE marker), factor rows colored
+  green/red, L for late braking, C to attack on demand. Time slows only until a choice is made. The camera frames
+  the car and the corner above the panel (`Camera`).
+- Car indicators: compound-colored tire edges, tire-condition bar on nearby cars, blinking red punctured tire,
+  lock-up smoke, red ring on the rival. Punctures: worn-out tires (wear above 95%) and contact; the car slows to
+  55% and is called in.
+- AI variety: every driver's line wanders a few meters from the racing line (more on lap 1), start reaction
+  times differ, and each driver has a battery style and decides afresh on every 500 m stretch.
+- Corner speeds: taken from the traced/hand-built layout at real width (capped at 30 m radius) instead of the
+  wide, rounded drawn track, so chicanes stay slow and fast corners fast. Braking is 1.5 times cornering grip
+  plus drag (F1 cars brake at up to about 5 g).
+- Corner rounding for the drawn track now spreads too-sharp turning over a longer arc (keeps each corner's total
+  turn), so U-shaped sections and hairpins keep their shape instead of flattening.
+- Corners: chicane halves and corners that brake before the previous apex are merged.
+- Sao Paulo: traced from the owner's outline picture with the new `tools/trace_outline.py` (Zhang-Suen
+  thinning, ordered walk, counter-clockwise, start line on the main straight, pieces closer than 62 m pushed
+  apart by moving the tighter curve as a whole). Overlay checked against the picture. 4309 m, 74 s approximate
+  lap, Senna S, Descida do Lago, the infield U and Bico de Pato, Junção.
+- Tests: corner-claim rules replace the old pass-probability test; the full-race test now checks that no two
+  cars are ever drawn on top of each other (except pit lane and retiring cars); 34 tests.
+- Removed 40 constants of the old pass system.

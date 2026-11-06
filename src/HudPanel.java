@@ -81,7 +81,7 @@ public final class HudPanel extends GCompound {
                 left + 12, height - 70, Palette.HUD, Palette.PLAYER);
         carLine = text("", left + 12, height - 51, Palette.MONO, Palette.TEXT);
         pitLine = text("", left + 12, height - 33, Palette.MONO, Palette.TEXT);
-        text("QWE push  X ERS  ASD battle  B/N box  1-5 tires  Space pause  T speed  Z zoom  F/G cam  Esc",
+        text("QWE push  X ERS  A/S/O/D line  L late brake  C attack  B/N box  1-5 tires  Space  T speed  Z  F/G  Esc",
                 left + 12, height - 14, Palette.SMALL, Palette.TEXT_DIM);
 
         bannerBox = new GRect(0, 0, 520, 84);

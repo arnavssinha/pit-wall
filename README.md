@@ -4,8 +4,9 @@ An F1 race-strategy game written in Java with the ACM graphics library.
 You are the race engineer for one driver in a 10-lap sprint. The car drives itself;
 you make the strategy calls.
 
-> Status: **M7 complete.** Full race weekend flow on Monza (menu, track select, setup, race, results) and
-> the Strategy Lab. More tracks, real data and the demo mode come in M8 and M9 (see `DEVLOG.md`).
+> Status: **M7 complete, plus feedback rounds.** Two circuits (Monza and Sao Paulo), the full race weekend
+> flow (menu, track select, setup, race, results) and the Strategy Lab. More tracks, real data and the demo
+> mode come in M8 and M9 (see `DEVLOG.md`).
 
 ## Play it in three steps
 
@@ -30,7 +31,9 @@ you make the strategy calls.
 |---|---|
 | Q / W / E | Push level: Conserve / Balanced / Push |
 | X | ERS deploy on or off (spends the battery on straights for extra speed) |
-| A / O / S / D | In a battle: Inside lunge / Around the outside / Defend (cover the inside) / Hold (or click the buttons). Pressed outside a battle, it pre-selects your stance for the next one |
+| A / S / O / D | In a fight: **attacking** Inside / Optimal / Outside / Stay behind; **defending** Cover inside / Optimal / Cover outside. Pressed outside a fight, it pre-selects your line for the next one |
+| L | Late braking on or off for the fight (gains ground, risks a lock-up) |
+| C | Attack the car ahead now (within 1.5 s): opens a fight for the next corner |
 | B | Box this lap (press again to cancel). Your plan also calls its stops automatically |
 | N | Box next lap |
 | 1-5 | Tires for the stop: Soft, Medium, Hard, Intermediate, Wet |
@@ -45,26 +48,36 @@ you make the strategy calls.
 
 ## How a race works
 
-1. **Menu, then Track Select** (Monza for now), **then Setup.** On the setup screen you see which driver
+1. **Menu, then Track Select** (Monza or Sao Paulo, keys 1-2), **then Setup.** On the setup screen you see which driver
    you were given and where they start (from a simulated qualifying session). You pick a strategy
    (one-stop early, one-stop late, two-stop, or no stop in short races), the tires for each stint, the
    race length (1-lap shootout, 3-lap sprint of about a minute, or 12-lap race of about five minutes,
    keys 1-3), the number of cars (10 to 22) and your baseline push level. Undo (U) takes back strategy edits.
-2. **The race.** The car drives itself. Watch the gauges and adjust the push level (Q/W/E). When a rival
-   is close before a braking zone, time slows and you choose: dive down the Inside (A), go around the
-   Outside (O), Defend by covering the inside (S) or Hold (D). Attackers pull out of the slipstream,
-   defenders move across, and cars can draw alongside and pass on the straight. ERS (X) gives a clear
-   boost (blue exhaust).
+2. **The race.** The car drives itself. Watch the gauges and adjust the push level (Q/W/E).
+   **Fights:** when you are within about a second of another car before a corner (or you press C), time
+   slows and a panel opens: red frame when you attack, blue when you defend. The track shows each choice as
+   a colored line (blue Inside, green Optimal, orange Outside, matching the buttons), the rival's line as
+   red dashes, and where you will brake. The panel lists the factors, not a percentage: the gap, your
+   straight-line speed against theirs and why (DRS, battery, tow), grip and tire wear, battery, how good the
+   corner is for passing, your lock-up risk and the rival's line. Green means it favors you, red them.
+   **How a pass is decided:** on the road. Speed differences come only from tow, DRS, ERS, grip and push.
+   If you are side by side at the turn-in, the corner goes to whoever is further alongside, with the inside
+   line ahead of the outside (you must be level to win around the outside); late braking helps but can lock
+   up (white smoke, you run wide); a close call can end in contact. The loser lifts and tucks in behind. An
+   Inside line exits slowly, so a car that covered the inside can be passed back on the exit (a switchback).
+   You can pass two or three cars on a straight, and cars that are not fighting simply follow.
    **DRS:** from lap 2, if you are less than a second behind the car ahead at a detection point, your
-   rear wing opens (it turns green) on the next long straight for extra speed. The gauge panel shows
-   "DRS ready" and "DRS OPEN". It is off in the rain and behind the safety car.
+   rear wing opens (it turns green) on the next long straight. It is off in the rain and behind the safety car.
    **Push levels matter:** Push is about 2% faster but wears tires about twice as fast and runs them
-   hotter; Conserve is about 2.5% slower but saves nearly half the wear.
-   A red triangle over a rival means they are about to attack you.
+   hotter; Conserve is about 2.5% slower and saves nearly half the wear.
+   **On the cars:** tire edges show the compound color; nearby cars have a tire-condition bar (green, then
+   yellow, then red as the tires wear); a blinking red tire is a puncture; a red ring marks your rival in a
+   fight and a red triangle a car about to attack you.
 3. **Weather and incidents.** The setup screen shows a forecast (press V for different weather). Rain
    wets the track gradually and some corners dry before others; slicks fall off a cliff on a wet track.
    A car stopping on track brings out the safety car: no overtaking, the field bunches up, and a pit stop
-   costs less time. Cars can also retire with mechanical failures. Your engineer warns you on the radio.
+   costs less time. Cars can also retire with mechanical failures. Tires worn past the limit can puncture
+   (contact can too): the car slows badly and is called into the pits. Your engineer warns you on the radio.
 4. **Pit stops.** Your plan calls its stops automatically (the radio tells you). Press B to cancel or to
    box early, N to box next lap, and 1-5 to change the tires. Each team has its own box along the pit
    lane; cars pull into their box so others can drive past, and teammates queue (a "double stack"). In a dry race you must use two different
@@ -86,7 +99,8 @@ A ten-minute check that everything works:
    setup screen. Press R a few times: your driver and grid slot change. Press V: the weather forecast changes.
 2. Press Enter to start. Press F3: the top-right box shows the frame rate (it should be close to 60).
 3. Press T until it says 8x. Press E (Push) and watch the tire temperature needle and wear bar rise faster.
-4. When the screen slows down and a red box appears, press A (or click Attack). Read the result on the radio.
+4. When the screen slows down and the fight panel appears, look at the colored lines on the track, press A, S
+   or O (and L for late braking). Read the result on the radio. Press C behind a car to attack on demand.
 5. Wait for your planned pit stop (the bottom panel tells you the lap), or press B to box now.
    Watch the car drive through the pit lane.
 6. Let the race finish (or press Enter after you cross the line): check the results screen.
@@ -100,6 +114,13 @@ A ten-minute check that everything works:
 - **Monza lap length (5793 m)** is the official circuit length.
 - **Monza target race lap (85.0 s)** is an approximate figure, flagged as such in
   `data/tracks/monza.properties`. It will be replaced by a median computed from FastF1 race laps.
+- **Sao Paulo track shape: approximate, traced.** `data/tracks/saopaulo_centerline.csv` was traced from a
+  circuit outline picture with `tools/trace_outline.py` (thinned to a line, ordered counter-clockwise, scaled
+  to the official 4309 m). The Bico de Pato hairpin was moved slightly away from the pit straight so the wide
+  game track does not merge. Its pit lane is drawn on the outside (the real one is on the inside).
+- **Sao Paulo target race lap (74.0 s)** is an approximate figure, flagged in `data/tracks/saopaulo.properties`.
+- **Corner speeds** come from the traced/hand-built layout at real track width; the wide track you see is a
+  rounded, stylized version of it, so a chicane stays slow even though it is drawn as a smooth curve.
 - **Weather: APPROXIMATE.** `data/fallback_weather.csv` holds rough temperatures and a rain chance for
   each track from general knowledge of the race weekend, because the FastF1 export could not run yet.
   It is not measured data, and the setup screen says "APPROXIMATE weather data" while it is in use.

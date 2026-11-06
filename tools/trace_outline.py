@@ -8,7 +8,7 @@ smooths it, orders it counter-clockwise or clockwise to match the real circuit (
 lap_meters for clockwise), starts it at the pixel nearest (start_x, start_y) (the start/finish line),
 scales it to the lap length and, if parts of the circuit that are far apart along the lap come closer
 than min_gap_meters (default 66, the game's wide track plus a strip of grass), gently pushes them
-apart. The result is APPROXIMATE: a traced drawing, not survey or telemetry data.
+apart (the more sharply curving part is moved, so straights stay straight). The result is APPROXIMATE: a traced drawing, not survey or telemetry data.
 Needs numpy and Pillow.
 """
 import sys
@@ -84,10 +84,22 @@ def separate(points, lap, min_gap, passes=300):
         close = (along > 3 * min_gap) & (dist < min_gap)
         if not close.any():
             break
-        push = np.where(close, (min_gap - dist) * 0.25, 0.0)
-        p[:, 0] += (push * dx / dist).sum(1)
-        p[:, 1] += (push * dy / dist).sum(1)
-        p = 0.8 * p + 0.1 * np.roll(p, 1, 0) + 0.1 * np.roll(p, -1, 0)
+        # Bend the tighter curve away, not the straighter one: each point of a close pair moves in
+        # proportion to how sharply the line turns there, so straights stay straight.
+        heading = np.arctan2(np.roll(p[:, 1], -1) - np.roll(p[:, 1], 1), np.roll(p[:, 0], -1) - np.roll(p[:, 0], 1))
+        turn = np.abs(np.angle(np.exp(1j * (np.roll(heading, -2) - np.roll(heading, 2))))) + 1e-3
+        share = turn[:, None] / (turn[:, None] + turn[None, :])
+        push = np.where(close, (min_gap - dist) * 0.5 * share, 0.0)
+        move = np.stack([(push * dx / dist).sum(1), (push * dy / dist).sum(1)], axis=1)
+        # Spread each push smoothly along the loop (a Gaussian over nearby points), so a whole corner
+        # moves as one piece instead of getting a dent.
+        offsets = np.arange(-24, 25)
+        weights = np.exp(-0.5 * (offsets / 8.0) ** 2)
+        spread = np.zeros_like(move)
+        for o, w in zip(offsets, weights):
+            spread += w * np.roll(move, o, axis=0)
+        peak = np.abs(spread).max() or 1.0
+        p += spread * (np.abs(move).max() / peak)
     return p * (lap / np.sum(np.hypot(*np.diff(np.vstack([p, p[:1]]), axis=0).T)))
 
 
