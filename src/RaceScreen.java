@@ -219,13 +219,18 @@ public final class RaceScreen implements Screen {
         }
         if (battle == null) {
             easeClock += realSeconds;
-        } else if (!battle.isResolved()) {
+        } else if (!battle.isResolved() && !battle.isPlayerDecided()) {
             promptClock += realSeconds;
             if (promptClock >= Tuning.BATTLE_DECISION_SECONDS) {
-                battle.lockPlayerStance();
+                Car player = race.getPlayerCar();
+                race.getBattles().choosePlayerLine(
+                        LineChoicePolicy.playerDefault(player, battle.getGapSeconds(), battle.isPlayerAttacking()));
+                battle.markPlayerDecided();
             }
             easeClock = 0;
             return Math.min(chosen, Tuning.BATTLE_SLOWDOWN);
+        } else if (!battle.isResolved()) {
+            easeClock += realSeconds;
         } else {
             resultClock += realSeconds;
             easeClock += realSeconds;
@@ -272,7 +277,7 @@ public final class RaceScreen implements Screen {
     private Car warnedRival() {
         Car player = race.getPlayerCar();
         for (Car car : race.getCars()) {
-            if (car != player && car.getIntent() == Stance.ATTACK && race.carAheadOnTrack(car) == player
+            if (car != player && car.getIntent().leavesLine() && race.carAheadOnTrack(car) == player
                     && race.trackGap(car, player) < car.getSpeed() * Tuning.INTENT_GAP_SECONDS) {
                 return car;
             }
@@ -281,7 +286,7 @@ public final class RaceScreen implements Screen {
     }
 
     /**
-     * Handles a mouse click: a stance button on the battle prompt.
+     * Handles a mouse click: a line button or the late braking switch on the battle panel.
      *
      * @param x x on the canvas
      * @param y y on the canvas
@@ -289,9 +294,13 @@ public final class RaceScreen implements Screen {
     @Override
     public void handleClick(double x, double y) {
         if (promptShown) {
-            Stance stance = prompt.stanceAt(x - prompt.getX(), y - prompt.getY());
-            if (stance != null) {
-                race.getBattles().choosePlayerStance(stance);
+            double px = x - prompt.getX();
+            double py = y - prompt.getY();
+            LineChoice line = prompt.choiceAt(px, py);
+            if (line != null) {
+                race.getBattles().choosePlayerLine(line);
+            } else if (prompt.isLateBrakeAt(px, py)) {
+                race.getBattles().togglePlayerLateBrake();
             }
         }
     }
@@ -303,6 +312,7 @@ public final class RaceScreen implements Screen {
         Battle battle = race.getBattles().getPlayerBattle();
         camera.update(followed, battle != null && !battle.isResolved());
         world.updateCars(warnedRival());
+        world.updatePreview();
         updatePrompt();
         radio.update(race.getMessages());
         weather.update(race.getConditions(), lastFrameSeconds);
@@ -384,16 +394,22 @@ public final class RaceScreen implements Screen {
                 chooseCompound(Compound.values()[keyCode - KeyEvent.VK_1]);
                 break;
             case KeyEvent.VK_A:
-                race.getBattles().choosePlayerStance(Stance.ATTACK);
-                break;
-            case KeyEvent.VK_O:
-                race.getBattles().choosePlayerStance(Stance.OUTSIDE);
+                race.getBattles().choosePlayerLine(LineChoice.INSIDE);
                 break;
             case KeyEvent.VK_S:
-                race.getBattles().choosePlayerStance(Stance.DEFEND);
+                race.getBattles().choosePlayerLine(LineChoice.OPTIMAL);
+                break;
+            case KeyEvent.VK_O:
+                race.getBattles().choosePlayerLine(LineChoice.OUTSIDE);
                 break;
             case KeyEvent.VK_D:
-                race.getBattles().choosePlayerStance(Stance.HOLD);
+                race.getBattles().choosePlayerLine(LineChoice.STAY_BEHIND);
+                break;
+            case KeyEvent.VK_L:
+                race.getBattles().togglePlayerLateBrake();
+                break;
+            case KeyEvent.VK_C:
+                race.getBattles().requestPlayerAttack();
                 break;
             case KeyEvent.VK_F3:
                 toggleDebug();

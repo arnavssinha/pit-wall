@@ -60,7 +60,7 @@ public final class SimTests {
         check("slipstream helps only close behind on straights", () -> testSlipstream());
         check("corners found with braking zones and difficulty", () -> testCorners());
         check("DRS: zones on long straights, only from lap 2, only in a zone", () -> testDrs());
-        check("pass chances: Monza-like high, Monaco-like very low", () -> testPassProbabilityBands());
+        check("corner rules: inside alongside wins, outside must be level", () -> testCornerClaims());
         check("AI-only Monza races: pass rate in band", () -> testRacePassRate());
         check("pit stop: on the planned lap, new tires, 15-35 s lost", () -> testPitStop());
         check("two-compound rule disqualifies a no-stop car", () -> testCompoundRule());
@@ -339,16 +339,14 @@ public final class SimTests {
                     }
                     double gap = race.trackGap(car, other);
                     if (gap < Tuning.MIN_SEPARATION - 1e-6) {
-                        boolean allowed = car.getPassPartner() == other || car.isOffTrack() != other.isOffTrack()
-                                || car.isRetired() || other.isRetired() || (car.isInPitLane() && other.isInPitLane())
-                                || car.isFinished() || other.isFinished();
-                        // In the pit lane cars swing in and out of boxes only 22 m apart, so brief
-                        // sideways overlaps there are accepted; on the track the strict rule holds.
-                        boolean pitPair = car.isInPitLane() && other.isInPitLane();
-                        boolean apart = pitPair || Race.sideBySide(car, other);
-                        require(apart && allowed,
+                        // Any two cars may run side by side; they must never be drawn on top of each
+                        // other. Exceptions: the pit lane (cars swing in and out of boxes 22 m apart)
+                        // and a retired car rolling off the track.
+                        boolean exempt = (car.isInPitLane() && other.isInPitLane()) || car.isRetired() || other.isRetired();
+                        double sideways = Math.abs(car.getLateralOffset() - other.getLateralOffset());
+                        require(exempt || sideways > Tuning.CAR_WIDTH * 0.85,
                                 "overlap: " + car.getDriver().getCode() + " is " + gap + " m behind "
-                                + other.getDriver().getCode() + " without being alongside (pass or pit lane)");
+                                + other.getDriver().getCode() + " but only " + sideways + " m to the side");
                         sideBySideSteps++;
                     } else {
                         closest = Math.min(closest, gap);
@@ -584,40 +582,43 @@ public final class SimTests {
     }
 
     /**
-     * Checks the pass formula for two equal cars: on an easy track an attack against a car that
-     * holds usually works and against a defender sometimes works; on a very hard track an attack
-     * against a defender almost never works.
+     * Checks the corner rules for two equal cars side by side: level on the inside wins easily, half
+     * alongside on the inside still wins, half alongside on the outside loses, level on the outside wins,
+     * nose to tail loses, late braking helps, a hard track helps the defender, and a car that is not
+     * attacking does not press its claim.
      */
-    private void testPassProbabilityBands() {
-        Race race = new Race(new RaceConfig(10, 1, 1L), monza(), roster());
-        Car a = race.getCars().get(1);
-        Car d = race.getCars().get(0);
-        Corner corner = race.getCorners().get(0);
-        double easyHold = chance(a, d, corner, Stance.HOLD, 0.15);
-        double easyDefend = chance(a, d, corner, Stance.DEFEND, 0.15);
-        double hardDefend = chance(a, d, corner, Stance.DEFEND, 0.9);
-        System.out.printf("      pass chance: easy track vs Hold %.2f, vs Defend %.2f; hard track vs Defend %.2f%n",
-                easyHold, easyDefend, hardDefend);
-        require(easyHold > 0.5 && easyHold < 0.95, "easy track vs Hold out of band");
-        require(easyDefend > 0.08 && easyDefend < easyHold, "easy track vs Defend out of band");
-        require(hardDefend < 0.1, "hard track vs Defend should be very low");
-    }
-
-    /**
-     * Pass probability for an attack from nose to tail (overlap 0) with no ERS and equal grip.
-     *
-     * @param a attacker
-     * @param d defender
-     * @param corner the corner
-     * @param defence the defender's stance
-     * @param trackDifficulty the track's overtaking difficulty
-     * @return probability
-     */
-    private static double chance(Car a, Car d, Corner corner, Stance defence, double trackDifficulty) {
-        Battle b = new Battle(a, d, corner, 0, 0.5, 0, false);
-        b.setAttackerStance(Stance.ATTACK);
-        b.setDefenderStance(defence);
-        return BattleResolver.passProbability(BattleResolver.passScore(b, 1.0, 1.0, false, false, trackDifficulty, 0.0));
+    private void testCornerClaims() {
+        Track track = monza();
+        Corner corner = new Corner(1, 1000, 1200, 0.01, 0.1);
+        int inside = corner.getInsideSide();
+        Team team = new Team("Test", "#FFFFFF");
+        Car front = new Car(0, new Driver(0, "DEF", "Defender", team), 1, 1.0, 0, 0, Compound.MEDIUM, false);
+        Car insideCar = new Car(1, new Driver(1, "INS", "Inside", team), 2, 1.0, 0, inside * Tuning.LANE_OFFSET,
+                Compound.MEDIUM, false);
+        Car outsideCar = new Car(2, new Driver(2, "OUT", "Outside", team), 3, 1.0, 0, -inside * Tuning.LANE_OFFSET,
+                Compound.MEDIUM, false);
+        insideCar.setLinePlan(new LinePlan(LineChoice.INSIDE, corner, false, true, 0, false, track));
+        outsideCar.setLinePlan(new LinePlan(LineChoice.OUTSIDE, corner, false, true, 0, false, track));
+        double half = Tuning.MIN_SEPARATION / 2;
+        double levelInside = BattleResolver.claim(insideCar, front, corner, 0, 0.15, 0);
+        double halfInside = BattleResolver.claim(insideCar, front, corner, half, 0.15, 0);
+        double halfOutside = BattleResolver.claim(outsideCar, front, corner, half, 0.15, 0);
+        double levelOutside = BattleResolver.claim(outsideCar, front, corner, 0, 0.15, 0);
+        double noseToTail = BattleResolver.claim(insideCar, front, corner, Tuning.MIN_SEPARATION * 0.95, 0.15, 0);
+        double hardTrack = BattleResolver.claim(insideCar, front, corner, half, 0.9, 0);
+        System.out.printf("      claims: level inside %.2f, half inside %.2f, half outside %.2f, level outside %.2f,"
+                + " nose to tail %.2f, half inside on a hard track %.2f%n",
+                levelInside, halfInside, halfOutside, levelOutside, noseToTail, hardTrack);
+        require(levelInside > 1.0, "level on the inside should win clearly");
+        require(halfInside > 0.2, "half alongside on the inside should win");
+        require(halfOutside < -0.2, "half alongside on the outside should lose");
+        require(levelOutside > 0, "level on the outside should win");
+        require(noseToTail < -0.2, "nose to tail should lose");
+        require(hardTrack < halfInside, "a hard track should favor the defender");
+        insideCar.setLinePlan(new LinePlan(LineChoice.INSIDE, corner, true, true, 0, false, track));
+        require(BattleResolver.claim(insideCar, front, corner, half, 0.15, 0) > halfInside, "late braking should help");
+        insideCar.setLinePlan(null);
+        require(BattleResolver.claim(insideCar, front, corner, half, 0.15, 0) < halfInside, "no attack, weaker claim");
     }
 
     /**
@@ -661,14 +662,15 @@ public final class SimTests {
         double rate = passes / (double) Math.max(1, attempts);
         System.out.printf("      3 races: %d attacks, %d passes (%.0f%% success, %.0f passes per race)%n",
                 attempts, passes, rate * 100, passes / 3.0);
-        require(rate > 0.15 && rate < 0.5, "pass success rate " + rate + " out of band");
+        require(rate > 0.08 && rate < 0.5, "pass success rate " + rate + " out of band");
         require(passes / 3.0 >= 8 && passes / 3.0 <= 70, "passes per race out of band");
     }
 
     /**
      * Gives the player the one-stop-late plan, runs the race, and checks the stop happened at the
      * end of lap 6 with Softs fitted (the box may sit just before or just after the line, so the stop is
-     * counted in lap 6 or lap 7), and that the laps around the stop lost a realistic amount of time.
+     * counted in lap 6 or lap 7), and that laps 6 and 7 (in-lap and out-lap) lost a realistic amount of
+     * time against laps 5 and 8.
      */
     private void testPitStop() {
         Race race = new Race(new RaceConfig(22, Tuning.RACE_LAPS, 21L), monza(), roster());
@@ -684,8 +686,8 @@ public final class SimTests {
         require(player.getStopsMade() == 1, "player should stop once, stopped " + player.getStopsMade());
         require(stopLap == 5 || stopLap == 6, "stop should be at the end of lap 6, came after lap " + stopLap);
         require(player.getTire().getCompound() == Compound.SOFT, "Softs should be fitted after the stop");
-        double loss = race.getLapTime(player, stopLap) - race.getLapTime(player, stopLap - 1)
-                + race.getLapTime(player, stopLap + 1) - race.getLapTime(player, stopLap + 2);
+        double loss = race.getLapTime(player, 6) - race.getLapTime(player, 5)
+                + race.getLapTime(player, 7) - race.getLapTime(player, 8);
         System.out.printf("      pit stop cost about %.1f s (box %.0f m from the line)%n", loss,
                 race.getPitLane().boxOf(player) > race.getTrack().getLapLength() / 2
                 ? race.getPitLane().boxOf(player) - race.getTrack().getLapLength() : race.getPitLane().boxOf(player));

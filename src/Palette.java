@@ -10,6 +10,40 @@ import java.util.HashMap;
  */
 public final class Palette {
 
+    /** Inside line in the battle preview and its button. */
+    public static final Color LINE_INSIDE = new Color(80, 200, 255);
+
+    /** Optimal line in the battle preview and its button. */
+    public static final Color LINE_OPTIMAL = new Color(110, 220, 120);
+
+    /** Outside line in the battle preview and its button. */
+    public static final Color LINE_OUTSIDE = new Color(255, 170, 60);
+
+    /** The rival's line in the battle preview. */
+    public static final Color LINE_RIVAL = new Color(255, 80, 90);
+
+    /** Braking point marker in the battle preview. */
+    public static final Color BRAKE_MARK = new Color(255, 255, 255);
+
+    /**
+     * Returns the color for a line choice.
+     *
+     * @param line the choice
+     * @return its color (grey for Stay behind)
+     */
+    public static Color lineColor(LineChoice line) {
+        switch (line) {
+            case INSIDE:
+                return LINE_INSIDE;
+            case OPTIMAL:
+                return LINE_OPTIMAL;
+            case OUTSIDE:
+                return LINE_OUTSIDE;
+            default:
+                return TEXT_DIM;
+        }
+    }
+
     /** Open DRS flap on a car's rear wing. */
     public static final Color DRS = new Color(70, 235, 120);
 

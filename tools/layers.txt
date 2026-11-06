@@ -26,7 +26,8 @@ sim Ers.java
 sim ProfileSet.java
 sim TrackConditions.java
 sim QualifyingEntry.java
-sim Stance.java
+sim LineChoice.java
+sim LinePlan.java
 sim Corner.java
 sim Battle.java
 sim BattleOutcome.java
@@ -49,7 +50,7 @@ sim RadioEngineer.java
 sim RaceReport.java
 
 ai AiDriver.java
-ai DefaultStancePolicy.java
+ai LineChoicePolicy.java
 ai PitStrategyPlanner.java
 
 data DataFiles.java

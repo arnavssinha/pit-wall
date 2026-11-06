@@ -22,11 +22,12 @@ public final class RacingLine {
      * @param y sample y positions in meters
      * @param heading sample headings in radians
      * @param spacing distance between samples in meters
+     * @param halfWidth how far from the centerline the line may go, in meters
      */
-    public RacingLine(double[] x, double[] y, double[] heading, double spacing) {
+    public RacingLine(double[] x, double[] y, double[] heading, double spacing, double halfWidth) {
         int n = x.length;
         offset = new double[n];
-        double limit = Tuning.TRACK_WIDTH / 2 - Tuning.RACING_LINE_EDGE_MARGIN;
+        double limit = halfWidth;
         double[] nx = new double[n];
         double[] ny = new double[n];
         double[] px = new double[n];

@@ -1,17 +1,12 @@
 import java.util.Locale;
-import java.util.Random;
 
 /**
- * Decides how a battle ends, using the formula from the brief (Section 3.6):
- * passScore = paceAdvantage + stanceBonus + ersBonus + tireAdvantage + closeness + overlap
- *             - trackOvertakingDifficulty - defenderBonus - cornerDifficulty,
- * where overlap rewards an attacker that has drawn alongside (or ahead) by the braking point.
- * An inside lunge has the biggest bonus and full risk; going around the outside has a smaller bonus
- * and much less risk, suffers less from the corner, and is hard for a defender covering the inside to stop.
- * passProbability = logistic(k times passScore).
- * Before the pass roll, an attacking driver risks a lock-up, running wide or contact; that risk
- * grows with worn tires, hot brakes, a wet track and the driver's aggression.
- * All weights are named constants in Tuning, and the one random generator is the race's own.
+ * The rules of wheel-to-wheel racing, kept separate from the bookkeeping in BattleManager.
+ * Who gets a corner is a "claim" worked out at turn-in from things the player can see: how far
+ * alongside the car behind is, who is on the inside, the two cars' grip, who is braking late (and
+ * whether that went wrong), and how hard the track is to pass on. Only a little randomness is added,
+ * so a car properly alongside on the inside nearly always gets the corner and a car only at the
+ * gearbox nearly never does, much like the real racing rules.
  */
 public final class BattleResolver {
 
@@ -22,113 +17,69 @@ public final class BattleResolver {
     }
 
     /**
-     * Works out the pass score for a battle in which the attacker attacks.
+     * Works out how strongly the car behind claims the corner. Positive means the car behind gets the
+     * corner, negative means the car ahead keeps it. A car behind that is not attacking (no fight line,
+     * or Stay behind) does not press its claim.
      *
-     * @param battle the battle (stances must be set)
-     * @param attackerGrip attacker's current tire and brake grip
-     * @param defenderGrip defender's current tire and brake grip
-     * @param attackerErs whether the attacker spends battery on the move
-     * @param defenderErs whether the defender spends battery to defend
-     * @param trackDifficulty the track's overtaking difficulty, 0 (easy) to 1 (hard)
-     * @param overlap how far alongside the attacker is at the braking point: 0 nose to tail
-     *                (as close as cars may follow), +1 level, -1 a further minimum gap back
-     * @return the pass score; higher means a pass is more likely
+     * @param rear the car behind (nose not yet past the other car)
+     * @param front the car ahead
+     * @param corner the corner being entered
+     * @param gapMeters distance from the car behind to the car ahead along the track, 0 when level
+     * @param trackDifficulty the track's overtaking difficulty (0 easy to 1 impossible)
+     * @param noise a small random term (0 for the plain rules)
+     * @return the claim
      */
-    public static double passScore(Battle battle, double attackerGrip, double defenderGrip,
-                                   boolean attackerErs, boolean defenderErs, double trackDifficulty, double overlap) {
-        Car a = battle.getAttacker();
-        Car d = battle.getDefender();
-        double paceAdvantage = (speedScale(a) - speedScale(d)) * Tuning.PASS_PACE_WEIGHT;
-        double tireAdvantage = (attackerGrip - defenderGrip) * Tuning.PASS_TIRE_WEIGHT;
-        double closeness = (1.0 - battle.getGapSeconds() / Tuning.BATTLE_GAP_SECONDS) * Tuning.PASS_CLOSENESS_WEIGHT;
-        boolean outside = battle.getAttackerStance() == Stance.OUTSIDE;
-        double stanceBonus = outside ? Tuning.PASS_OUTSIDE_BONUS
-                : battle.getAttackerStance() == Stance.ATTACK ? Tuning.PASS_ATTACK_BONUS : 0;
-        double ersBonus = (attackerErs ? Tuning.PASS_ERS_BONUS : 0) - (defenderErs ? Tuning.PASS_ERS_DEFENCE : 0);
-        double defenderBonus = battle.getDefenderStance() == Stance.DEFEND ? Tuning.PASS_DEFEND_BONUS : 0;
-        if (outside) {
-            defenderBonus *= Tuning.OUTSIDE_DEFEND_SHARE;
-        }
-        double trackPenalty = trackDifficulty * Tuning.PASS_TRACK_WEIGHT;
-        double cornerPenalty = battle.getCorner().getDifficulty() * Tuning.PASS_CORNER_WEIGHT
-                * (outside ? Tuning.OUTSIDE_CORNER_SHARE : 1.0);
-        double overlapBonus = Math.max(-1, Math.min(1, overlap)) * Tuning.PASS_OVERLAP_WEIGHT;
-        return Tuning.PASS_BASE_SCORE + paceAdvantage + stanceBonus + ersBonus + tireAdvantage + closeness
-                + overlapBonus - trackPenalty - defenderBonus - cornerPenalty;
+    public static double claim(Car rear, Car front, Corner corner, double gapMeters, double trackDifficulty, double noise) {
+        double alongside = Math.max(0, Math.min(1, 1 - gapMeters / Tuning.MIN_SEPARATION));
+        double insideBy = (rear.getLateralOffset() - front.getLateralOffset()) * corner.getInsideSide();
+        double side = Math.max(-1, Math.min(1, insideBy / Tuning.LATERAL_CLEARANCE));
+        double late = lateBraking(rear) - lateBraking(front);
+        double locked = lockedUp(front) - lockedUp(rear);
+        LinePlan rearPlan = rear.getLinePlan();
+        boolean rearAttacking = rearPlan != null && rearPlan.isAttacker() && rearPlan.getChoice() != LineChoice.STAY_BEHIND;
+        double intent = rearAttacking ? 0 : -Tuning.CLAIM_NO_ATTACK_PENALTY;
+        return Tuning.CLAIM_OVERLAP_WEIGHT * (alongside - Tuning.CLAIM_LEVEL_POINT)
+                + Tuning.CLAIM_INSIDE_WEIGHT * side
+                + Tuning.CLAIM_GRIP_WEIGHT * (rear.getCurrentGrip() - front.getCurrentGrip())
+                + Tuning.CLAIM_LATE_BRAKE_WEIGHT * late
+                + Tuning.CLAIM_LOCKUP_WEIGHT * locked
+                - Tuning.CLAIM_TRACK_WEIGHT * trackDifficulty
+                + intent
+                + noise;
     }
 
     /**
-     * Turns a pass score into a probability with the logistic curve 1 / (1 + e to the minus k score).
-     * A score of 0 means a coin flip; large positive scores approach certainty.
+     * Chance that a car braking late locks its brakes: higher on worn tires, with overheated brakes,
+     * on a wet track and when pushing hard.
      *
-     * @param score the pass score
-     * @return probability from 0 to 1
+     * @param car the late-braking car
+     * @param wetness track wetness at the braking point, 0 to 1
+     * @return probability from 0 to Tuning.RISK_MAX
      */
-    public static double passProbability(double score) {
-        return 1.0 / (1.0 + Math.exp(-Tuning.PASS_LOGISTIC_K * score));
-    }
-
-    /**
-     * Chance that an attacking move goes wrong (lock-up, running wide or contact).
-     *
-     * @param attacker the attacking car
-     * @param wetness track wetness from 0 to 1
-     * @param stance the attacker's stance (an outside move is much safer)
-     * @return risk from 0 to 1
-     */
-    public static double attackRisk(Car attacker, double wetness, Stance stance) {
-        double brakeHeat = Math.max(0, attacker.getBrakes().getTemperature() - Tuning.RISK_BRAKE_TEMP);
+    public static double lockUpChance(Car car, double wetness) {
+        double brakeHeat = Math.max(0, car.getBrakes().getTemperature() - Tuning.RISK_BRAKE_TEMP);
         double risk = Tuning.RISK_BASE
-                + attacker.getTire().getWear() * Tuning.RISK_PER_WEAR
+                + car.getTire().getWear() * Tuning.RISK_PER_WEAR
                 + brakeHeat / Tuning.RISK_BRAKE_SPAN
                 + wetness * Tuning.RISK_PER_WETNESS
-                + (attacker.getAggression() - 0.5) * Tuning.RISK_PER_AGGRESSION;
-        if (stance == Stance.OUTSIDE) {
-            risk *= Tuning.OUTSIDE_RISK_SHARE;
-        }
+                + (car.getPushLevel() == PushLevel.PUSH ? Tuning.RISK_WHEN_PUSHING : 0);
         return Math.max(0, Math.min(Tuning.RISK_MAX, risk));
     }
 
     /**
-     * Resolves a battle and records the outcome and message on it.
+     * Describes lock-up risk in words, for the battle panel.
      *
-     * @param battle the battle (both stances set)
-     * @param attackerGrip attacker's current grip
-     * @param defenderGrip defender's current grip
-     * @param attackerErs whether the attacker spends battery
-     * @param defenderErs whether the defender spends battery
-     * @param trackDifficulty the track's overtaking difficulty
-     * @param wetness track wetness at the corner
-     * @param overlap how far alongside the attacker is (see passScore)
-     * @param random the race's random generator
-     * @return the outcome
+     * @param car the car
+     * @param wetness track wetness at the braking point
+     * @return "low", "medium" or "high"
      */
-    public static BattleOutcome resolve(Battle battle, double attackerGrip, double defenderGrip,
-                                        boolean attackerErs, boolean defenderErs, double trackDifficulty,
-                                        double wetness, double overlap, Random random) {
-        BattleOutcome outcome;
-        Stance stance = battle.getAttackerStance();
-        if (stance != Stance.ATTACK && stance != Stance.OUTSIDE) {
-            outcome = BattleOutcome.NO_ATTEMPT;
-        } else if (random.nextDouble() < attackRisk(battle.getAttacker(), wetness, stance)) {
-            double kind = random.nextDouble();
-            if (kind < Tuning.INCIDENT_LOCKUP_SHARE) {
-                outcome = BattleOutcome.LOCKED_UP;
-            } else if (kind < Tuning.INCIDENT_LOCKUP_SHARE + Tuning.INCIDENT_RUN_WIDE_SHARE) {
-                outcome = BattleOutcome.RAN_WIDE;
-            } else {
-                outcome = BattleOutcome.CONTACT;
-            }
-        } else {
-            double score = passScore(battle, attackerGrip, defenderGrip, attackerErs, defenderErs, trackDifficulty, overlap);
-            outcome = random.nextDouble() < passProbability(score) ? BattleOutcome.PASSED : BattleOutcome.HELD;
-        }
-        battle.finish(outcome, describe(battle, outcome));
-        return outcome;
+    public static String riskWord(Car car, double wetness) {
+        double risk = lockUpChance(car, wetness);
+        return risk < Tuning.RISK_WORD_MEDIUM ? "low" : risk < Tuning.RISK_WORD_HIGH ? "medium" : "high";
     }
 
     /**
-     * Writes the one-line result, using "You" for the player's car.
+     * Writes the radio message for a finished battle.
      *
      * @param battle the battle
      * @param outcome how it ended
@@ -136,30 +87,35 @@ public final class BattleResolver {
      */
     public static String describe(Battle battle, BattleOutcome outcome) {
         String a = name(battle.getAttacker(), true);
-        String aObj = name(battle.getAttacker(), false);
         String d = name(battle.getDefender(), true);
         String dObj = name(battle.getDefender(), false);
+        String aObj = name(battle.getAttacker(), false);
         int turn = battle.getCorner().getNumber();
+        LineChoice line = battle.getAttackerLine();
         switch (outcome) {
             case PASSED:
-                if (battle.getAttackerStance() == Stance.OUTSIDE) {
+                if (battle.wasPassedBeforeBraking()) {
+                    return String.format(Locale.ROOT, "%s drove past %s on the straight before Turn %d", a, dObj, turn);
+                }
+                if (line == LineChoice.OUTSIDE) {
                     return String.format(Locale.ROOT, "%s went around the outside of %s at Turn %d!", a, dObj, turn);
                 }
-                return String.format(Locale.ROOT, "%s lunged down the inside of %s into Turn %d", a, dObj, turn);
+                if (line == LineChoice.INSIDE) {
+                    String how = battle.isAttackerLate() ? "out-braked" : "dived down the inside of";
+                    return String.format(Locale.ROOT, "%s %s %s into Turn %d", a, how, dObj, turn);
+                }
+                return String.format(Locale.ROOT, "%s got the better exit and passed %s after Turn %d", a, dObj, turn);
             case HELD:
-                if (battle.getDefenderStance() == Stance.DEFEND) {
-                    return String.format(Locale.ROOT, "%s defended Turn %d and held off %s", d, turn, aObj);
+                if (battle.getDefenderLine() == LineChoice.INSIDE) {
+                    return String.format(Locale.ROOT, "%s covered the inside at Turn %d and held off %s", d, turn, aObj);
                 }
-                return String.format(Locale.ROOT, "%s tried at Turn %d but %s held on", a, turn, dObj);
+                return String.format(Locale.ROOT, "%s kept %s behind through Turn %d", d, aObj, turn);
             case NO_ATTEMPT:
-                if (battle.getDefenderStance() == Stance.DEFEND) {
-                    return String.format(Locale.ROOT, "%s covered Turn %d but %s never came: time lost", d, turn, aObj);
-                }
                 return String.format(Locale.ROOT, "%s stayed behind %s through Turn %d", a, dObj, turn);
             case LOCKED_UP:
-                return String.format(Locale.ROOT, "%s locked up into Turn %d, lost %.1f s", a, turn, Tuning.LOCKUP_TIME_LOSS);
-            case RAN_WIDE:
-                return String.format(Locale.ROOT, "%s ran wide at Turn %d, lost %.1f s", a, turn, Tuning.RUN_WIDE_TIME_LOSS);
+                LinePlan plan = battle.getAttacker().getLinePlan();
+                String who = plan != null && plan.isLockedUp() ? a : d;
+                return String.format(Locale.ROOT, "%s locked up into Turn %d and ran wide", who, turn);
             case CONTACT:
                 return String.format(Locale.ROOT, "Contact! %s and %s touched at Turn %d", a, dObj, turn);
             default:
@@ -168,26 +124,38 @@ public final class BattleResolver {
     }
 
     /**
-     * Returns the name used in messages: "You" or "you" for the player, otherwise the driver code.
+     * Returns 1 if a car is braking late in its current fight line (and has not locked up), else 0.
+     *
+     * @param car the car
+     * @return 1 or 0
+     */
+    private static double lateBraking(Car car) {
+        LinePlan plan = car.getLinePlan();
+        return plan != null && plan.isLateBrake() && !plan.isLockedUp() ? 1 : 0;
+    }
+
+    /**
+     * Returns 1 if a car has locked up in its current fight line, else 0.
+     *
+     * @param car the car
+     * @return 1 or 0
+     */
+    private static double lockedUp(Car car) {
+        LinePlan plan = car.getLinePlan();
+        return plan != null && plan.isLockedUp() ? 1 : 0;
+    }
+
+    /**
+     * Returns a car's name for a message.
      *
      * @param car the car
      * @param subject true at the start of a sentence
-     * @return the name
+     * @return "You", "you" or the three-letter code
      */
     private static String name(Car car, boolean subject) {
         if (car.isPlayer()) {
             return subject ? "You" : "you";
         }
         return car.getDriver().getCode();
-    }
-
-    /**
-     * Returns a car's speed multiplier from race pace and push level (not ERS).
-     *
-     * @param car the car
-     * @return speed scale
-     */
-    private static double speedScale(Car car) {
-        return car.getPaceFactor() * car.getPushLevel().getPace();
     }
 }

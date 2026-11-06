@@ -78,6 +78,6 @@ public final class CarPhysics {
      * @return deceleration in m/s squared, as a positive number
      */
     public static double braking(double speed, double gripScale) {
-        return gripAcceleration(speed, gripScale);
+        return gripAcceleration(speed, gripScale) * Tuning.BRAKING_GRIP_FACTOR + Tuning.DRAG_DECELERATION;
     }
 }

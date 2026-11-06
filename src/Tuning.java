@@ -69,6 +69,12 @@ public final class Tuning {
     /** Tightest corner radius the drawn track may have, in meters, so the wide drawn track never folds. Style choice. */
     public static final double MIN_CORNER_RADIUS = 40.0;
 
+    /**
+     * Tightest corner radius used for corner speeds, in meters. The real layout keeps its tight corners
+     * for speed, but a traced picture can draw a hairpin tighter than the real one, so it is capped here.
+     */
+    public static final double MIN_SPEED_RADIUS = 30.0;
+
     /** Most smoothing passes used to round off corners tighter than MIN_CORNER_RADIUS. */
     public static final int CORNER_EASING_MAX_PASSES = 4000;
 
@@ -152,7 +158,7 @@ public final class Tuning {
     public static final double BATTLE_GAP_SECONDS = 1.0;
 
     /** A battle opens this many seconds (at current speed) before the corner's braking point. */
-    public static final double BATTLE_OPEN_LEAD_SECONDS = 4.0;
+    public static final double BATTLE_OPEN_LEAD_SECONDS = 6.0;
 
     /** Simulation speed while the player decides (slow enough to read, quick enough to keep the flow). */
     public static final double BATTLE_SLOWDOWN = 0.35;
@@ -547,6 +553,207 @@ public final class Tuning {
      * much slower than its rival until it is clear behind, in m/s, so no pass stays side by side for long.
      */
     public static final double PASS_YIELD_SPEED = 5.0;
+
+    /**
+     * Braking is stronger than cornering grip by this factor: a car brakes in a straight line with the
+     * whole tire, and an F1 car decelerates at up to about 5 g. Balance choice.
+     */
+    public static final double BRAKING_GRIP_FACTOR = 1.5;
+
+    /** Extra deceleration from air drag and engine braking when lifting, in m/s squared. Balance choice. */
+    public static final double DRAG_DECELERATION = 4.0;
+
+    /**
+     * How far from the centerline the corner-speed line may go, in meters: a real track is about
+     * 12 to 15 m wide, so a car's center can be about 5 m either side. See Track.speedLine.
+     */
+    public static final double SPEED_LINE_HALF_WIDTH = 5.0;
+
+    /** Sideways position of the Inside and Outside lanes, in meters from the centerline. */
+    public static final double LANE_OFFSET = 14.0;
+
+    /** Distance over which a car moves across into its fight lane, in meters. */
+    public static final double LANE_CHANGE_METERS = 160.0;
+
+    /** An attacker is settled in its lane this many meters before the braking point. */
+    public static final double LANE_SETTLE_BEFORE_BRAKING = 20.0;
+
+    /** A defender covering a side is settled this many meters before the braking point (it moves first). */
+    public static final double COVER_SETTLE_BEFORE_BRAKING = 80.0;
+
+    /** Distance after the apex over which a car blends back to the racing line, in meters. */
+    public static final double CORNER_EXIT_METERS = 120.0;
+
+    /** How far toward the outside edge a car that locked up runs wide, in meters from the centerline. */
+    public static final double RUN_WIDE_OFFSET = 22.0;
+
+    /** How much later a late-braking car brakes, in meters. Balance choice. */
+    public static final double LATE_BRAKE_METERS = 25.0;
+
+    /** Speed lost through the corner after a lock-up, as a fraction. Balance choice. */
+    public static final double LOCKUP_SPEED_LOSS = 0.15;
+
+    /** Extra tire wear from a lock-up (a flat spot). */
+    public static final double LOCKUP_TIRE_WEAR = 0.01;
+
+    /** Speed lost on the way into the corner on the Outside line (the long way round), as a fraction. */
+    public static final double OUTSIDE_ENTRY_LOSS = 0.03;
+
+    /** Speed lost on the exit after taking the Inside line (a tight, slow exit), as a fraction. */
+    public static final double INSIDE_EXIT_LOSS = 0.06;
+
+    /** Speed of a car with a punctured tire, as a fraction of normal. Balance choice. */
+    public static final double PUNCTURE_SPEED_FRACTION = 0.55;
+
+    /** Sideways speed while following a fight line, in m/s (the steering limit usually applies first). */
+    public static final double PLAN_LATERAL_SPEED = 30.0;
+
+    /** How strongly a driver's own line offset is pulled back toward the racing line each second. */
+    public static final double LINE_BIAS_PULL_BACK = 0.15;
+
+    /** Typical change of a driver's own line offset each second, in meters. */
+    public static final double LINE_BIAS_STEP = 1.2;
+
+    /** Largest own line offset after the first lap, in meters. */
+    public static final double LINE_BIAS_RANGE = 3.0;
+
+    /** Largest own line offset on the first lap (the field spreads out after the start), in meters. */
+    public static final double LINE_BIAS_START_RANGE = 7.0;
+
+    /** Shortest start reaction time, in seconds. */
+    public static final double LAUNCH_DELAY_MIN = 0.05;
+
+    /** Spread of start reaction times on top of the shortest, in seconds. Balance choice. */
+    public static final double LAUNCH_DELAY_SPREAD = 0.35;
+
+    /** Within this many seconds of a car ahead, a car loses grip in its dirty air through corners. */
+    public static final double DIRTY_AIR_SECONDS = 1.0;
+
+    /** Most corner speed lost right behind another car in its dirty air, as a fraction. Balance choice. */
+    public static final double DIRTY_AIR_LOSS = 0.04;
+
+    /** A car that chose Stay behind keeps this many seconds back from the car ahead. */
+    public static final double STAY_BEHIND_GAP_SECONDS = 0.6;
+
+    /** How much a computer driver's battery style moves its deploy threshold and how often it deploys. */
+    public static final double AI_ERS_STYLE_RANGE = 0.3;
+
+    /** Computer drivers decide afresh whether to deploy on each stretch of this length, in meters. */
+    public static final double AI_ERS_STRETCH_METERS = 500.0;
+
+    /** Share of stretches on which an average computer driver deploys. */
+    public static final double AI_ERS_USE_SHARE = 0.6;
+
+    /** Corner claim: weight of how far alongside the car behind is. */
+    public static final double CLAIM_OVERLAP_WEIGHT = 2.5;
+
+    /** Corner claim: how far alongside (0 nose to tail, 1 level) counts as an even claim before other factors. */
+    public static final double CLAIM_LEVEL_POINT = 0.45;
+
+    /** Corner claim: weight of being on the inside. */
+    public static final double CLAIM_INSIDE_WEIGHT = 0.9;
+
+    /** Corner claim: weight of the grip difference. */
+    public static final double CLAIM_GRIP_WEIGHT = 6.0;
+
+    /** Corner claim: bonus for braking late. */
+    public static final double CLAIM_LATE_BRAKE_WEIGHT = 0.4;
+
+    /** Corner claim: penalty for a car that locked up. */
+    public static final double CLAIM_LOCKUP_WEIGHT = 3.0;
+
+    /** Corner claim: how much a hard-to-pass track favors the car ahead. */
+    public static final double CLAIM_TRACK_WEIGHT = 1.0;
+
+    /** Corner claim: size of the random part (standard deviation). */
+    public static final double CLAIM_NOISE = 0.3;
+
+    /** Claims closer than this to even can end in contact. */
+    public static final double CONTACT_BAND = 0.15;
+
+    /** Chance of contact when a claim is that close. */
+    public static final double CONTACT_CHANCE = 0.35;
+
+    /** Chance that contact punctures a tire. */
+    public static final double CONTACT_PUNCTURE_CHANCE = 0.2;
+
+    /** Extra lock-up chance when pushing. */
+    public static final double RISK_WHEN_PUSHING = 0.03;
+
+    /** Lock-up chance from which the battle panel says the risk is medium. */
+    public static final double RISK_WORD_MEDIUM = 0.12;
+
+    /** Lock-up chance from which the battle panel says the risk is high. */
+    public static final double RISK_WORD_HIGH = 0.25;
+
+    /** AI attack edge: value of DRS. */
+    public static final double AI_EDGE_DRS = 0.25;
+
+    /** AI attack edge: value of having more battery charge (per full battery). */
+    public static final double AI_EDGE_ERS = 0.3;
+
+    /** AI attack edge: value of a grip advantage (per unit of grip). */
+    public static final double AI_EDGE_GRIP = 4.0;
+
+    /** AI attack edge: value of being close (per second inside the battle gap). */
+    public static final double AI_EDGE_CLOSE = 0.3;
+
+    /** AI attack chance before aggression and edge. */
+    public static final double AI_ATTACK_BASE = 0.1;
+
+    /** Chance a computer driver going down the inside brakes late (scaled by aggression). */
+    public static final double AI_LATE_BRAKE_INSIDE = 0.45;
+
+    /** Chance a computer driver on another line brakes late (scaled by aggression). */
+    public static final double AI_LATE_BRAKE_OTHER = 0.15;
+
+    /** Chance a computer defender covers the outside against an attack around the outside. */
+    public static final double AI_COVER_OUTSIDE = 0.35;
+
+    /** Share of computer defenders' late-braking decisions that they act on. */
+    public static final double AI_DEFEND_LATE_SHARE = 0.5;
+
+    /** Chance a computer attacker switches sides when the defender covers its side. */
+    public static final double AI_SWITCH_SIDES_CHANCE = 0.6;
+
+    /** The player's choice locks this many meters before their braking point. */
+    public static final double PLAYER_LOCK_BEFORE_BRAKING = 60.0;
+
+    /** Two cars side by side this many meters before the apex get a ruling on who has the corner. */
+    public static final double TURN_IN_BEFORE_APEX = 60.0;
+
+    /** Gap within which the player may launch an attack with the attack key, in seconds. */
+    public static final double ON_DEMAND_ATTACK_GAP = 1.5;
+
+    /** A battle needs at least this many seconds before the braking point, so there is time to choose. */
+    public static final double BATTLE_MIN_LEAD_SECONDS = 1.0;
+
+    /** After a pass, the player is offered the next car at once if it is within reach this many seconds later. */
+    public static final double CHAIN_ATTACK_SECONDS = 6.0;
+
+    /** A battle that has not settled after this many seconds is closed. */
+    public static final double BATTLE_MAX_SECONDS = 30.0;
+
+    /** Corners with a difficulty below this are described to the player as good places to pass. */
+    public static final double EASY_CORNER = 0.3;
+
+    /** Corners with a difficulty from this up are described to the player as hard places to pass. */
+    public static final double HARD_CORNER = 0.65;
+
+    /** A car giving way never slows below this fraction of its own pace (so a queue can never stall). */
+    public static final double YIELD_FLOOR_FRACTION = 0.6;
+
+    /** A car stops giving way after this many seconds even if still level. */
+    public static final double YIELD_MAX_SECONDS = 6.0;
+
+    /** Corner claim: how much a car behind that is not attacking holds back. */
+    public static final double CLAIM_NO_ATTACK_PENALTY = 1.5;
+
+    /** A car that is not attacking but finds itself level with the car ahead drops back this much slower, in m/s. */
+    public static final double OVERLAP_DROP_SPEED = 2.0;
+
+    /** Most passes of the side-by-side check per step (more are needed when three cars are squeezed). */
+    public static final int SIDE_BY_SIDE_PASSES = 4;
 
     /** Steepest sideways movement per meter driven (about 17 degrees), so cars steer instead of sliding. */
     public static final double MAX_LATERAL_RATE = 0.3;

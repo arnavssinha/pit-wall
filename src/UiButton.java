@@ -22,6 +22,12 @@ public final class UiButton extends GCompound {
     /** Whether the button can be clicked. */
     private boolean enabled = true;
 
+    /** Color stripe on the left that ties the button to a line drawn on the track, or null. */
+    private GRect stripe;
+
+    /** The accent color, or null for a plain button. */
+    private Color accent;
+
     /**
      * Builds a button.
      *
@@ -50,12 +56,31 @@ public final class UiButton extends GCompound {
     }
 
     /**
+     * Gives the button a color: a stripe on its left side, and the fill when it is selected. Used to
+     * match a choice to the colored line drawn on the track.
+     *
+     * @param color the accent color
+     */
+    public void setAccent(Color color) {
+        accent = color;
+        if (stripe == null) {
+            stripe = new GRect(0, 0, 7, box.getHeight());
+            stripe.setFilled(true);
+            add(stripe);
+        }
+        stripe.setFillColor(color);
+        stripe.setColor(color);
+        setHighlighted(false);
+    }
+
+    /**
      * Shows the button as chosen or not.
      *
      * @param highlighted true to highlight
      */
     public void setHighlighted(boolean highlighted) {
-        Color fill = !enabled ? Palette.BUTTON_DISABLED : highlighted ? Palette.PLAYER : Palette.BUTTON;
+        Color selected = accent != null ? accent : Palette.PLAYER;
+        Color fill = !enabled ? Palette.BUTTON_DISABLED : highlighted ? selected : Palette.BUTTON;
         box.setFillColor(fill);
         box.setColor(highlighted ? Palette.TEXT : Palette.PANEL_EDGE);
         label.setColor(highlighted ? Palette.CAR_OUTLINE : enabled ? Palette.TEXT : Palette.TEXT_DIM);

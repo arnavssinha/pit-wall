@@ -1,4 +1,5 @@
 import acm.graphics.GCompound;
+import acm.graphics.GObject;
 import acm.graphics.GOval;
 import acm.graphics.GPolygon;
 import acm.graphics.GRect;
@@ -37,6 +38,12 @@ public final class WorldView extends GCompound {
     /** Current zoom in pixels per drawing unit. */
     private double zoom;
 
+    /** The race, for the fight preview. */
+    private final transient Race race;
+
+    /** Lines of the player's fight, drawn under the cars. */
+    private final transient LinePreview preview = new LinePreview();
+
     /**
      * Builds the scenery and the car sprites at a zoom of 1 pixel per drawing unit.
      *
@@ -45,10 +52,14 @@ public final class WorldView extends GCompound {
      */
     public WorldView(Race race, TrackDrawing drawing) {
         this.drawing = drawing;
+        this.race = race;
         this.zoom = 1.0;
         addGrassStripes();
         add(TrackRaster.build(drawing, race.getPitLane().getTeams()));
         addStartLineAndGrid(race.getConfig().getCarCount());
+        for (GObject object : preview.getObjects()) {
+            add(object);
+        }
         CarSprite playerSprite = null;
         for (Car car : race.getCars()) {
             CarSprite sprite = new CarSprite(car, car == race.getPlayerCar());
@@ -100,6 +111,13 @@ public final class WorldView extends GCompound {
      */
     public double getZoom() {
         return zoom;
+    }
+
+    /**
+     * Redraws the lines of the player's fight (hidden when there is none).
+     */
+    public void updatePreview() {
+        preview.update(race, drawing, zoom);
     }
 
     /**

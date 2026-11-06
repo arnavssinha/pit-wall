@@ -21,8 +21,15 @@ public final class Track {
     /** Exact spacing between samples in meters (the lap length divided by the sample count). */
     private final double spacing;
 
-    /** The racing line cars follow. */
+    /** The racing line cars follow, drawn across the whole (stylized, very wide) track. */
     private final RacingLine racingLine;
+
+    /**
+     * The racing line on the real (unrounded) layout at real track width, used only for corner speeds.
+     * The drawn track is rounded off and very wide, so its line nearly straightens a chicane; taking
+     * corner speeds from the real shape keeps a chicane slow and a fast sweeper fast, as on the circuit.
+     */
+    private final RacingLine speedLine;
 
     /** Smallest x of the centerline in meters, used to frame the camera and minimap. */
     private final double minX;
@@ -51,8 +58,13 @@ public final class Track {
         this.profile = profile;
         int count = (int) Math.round(profile.getLapLengthMeters() / Tuning.SAMPLE_SPACING);
         this.spacing = profile.getLapLengthMeters() / count;
-        List<double[]> even = resample(scaleToLength(rawPoints, profile.getLapLengthMeters()), count, spacing);
+        List<double[]> real = resample(scaleToLength(rawPoints, profile.getLapLengthMeters()), count, spacing);
+        List<double[]> even = new ArrayList<double[]>();
+        for (double[] p : real) {
+            even.add(new double[] {p[0], p[1]});
+        }
         limitCurvature(even, 1.0 / Tuning.MIN_CORNER_RADIUS);
+        limitCurvature(real, 1.0 / Tuning.MIN_SPEED_RADIUS);
         even = resample(scaleToLength(even, profile.getLapLengthMeters()), count, spacing);
         this.samples = buildSamples(even, spacing);
         int n = samples.size();
@@ -64,7 +76,17 @@ public final class Track {
             ys[i] = samples.get(i).getY();
             hs[i] = samples.get(i).getHeading();
         }
-        this.racingLine = new RacingLine(xs, ys, hs, spacing);
+        this.racingLine = new RacingLine(xs, ys, hs, spacing, Tuning.TRACK_WIDTH / 2 - Tuning.RACING_LINE_EDGE_MARGIN);
+        ArrayList<TrackSample> realSamples = buildSamples(real, spacing);
+        double[] rx = new double[n];
+        double[] ry = new double[n];
+        double[] rh = new double[n];
+        for (int i = 0; i < n; i++) {
+            rx[i] = realSamples.get(i).getX();
+            ry[i] = realSamples.get(i).getY();
+            rh[i] = realSamples.get(i).getHeading();
+        }
+        this.speedLine = new RacingLine(rx, ry, rh, spacing, Tuning.SPEED_LINE_HALF_WIDTH);
         double lowX = Double.MAX_VALUE;
         double highX = -Double.MAX_VALUE;
         double lowY = Double.MAX_VALUE;
@@ -192,7 +214,7 @@ public final class Track {
      * @return curvature in 1 per meter
      */
     public double getLineCurvature(int index) {
-        return racingLine.curvatureAt(index);
+        return speedLine.curvatureAt(index);
     }
 
     /**

@@ -86,8 +86,8 @@ public final class Car {
      */
     private double aggression = 0.5;
 
-    /** The stance a computer driver plans for its next corner, shown early as an attack warning. */
-    private Stance intent = Stance.HOLD;
+    /** The line a computer driver plans for its next corner, shown early as an attack warning. */
+    private LineChoice intent = LineChoice.STAY_BEHIND;
 
     /** Which corner (lap times 1000 plus corner number) the intent is for, or -1. */
     private int intentKey = -1;
@@ -95,17 +95,29 @@ public final class Car {
     /** Which corner (lap times 1000 plus corner number) this car last battled at as attacker, or -1. */
     private int lastBattleKey = -1;
 
-    /** The other car in a pass that is under way, or null. */
-    private Car passPartner;
+    /** The line this car is driving through the coming corner in a fight, or null. */
+    private LinePlan linePlan;
 
-    /** True if this car is the one doing the passing. */
-    private boolean passAttacker;
+    /** A car this car has lost a corner to and is dropping in behind, or null. */
+    private Car yieldTo;
 
-    /** True once the battle went the attacker's way and the pass is being completed. */
-    private boolean passGranted;
+    /** Race time this car started giving way. */
+    private double yieldSince;
 
-    /** True if the attack failed and the attacker is dropping back behind the partner. */
-    private boolean passAborting;
+    /** This driver's own small offset from the racing line, in meters; it wanders slowly. */
+    private double lineBias;
+
+    /** Seconds after the start before this driver gets going (reaction time and launch). */
+    private double launchDelay;
+
+    /**
+     * How this computer driver likes to use its battery, from 0 to 1: low saves charge for fights,
+     * high spends it freely. Drawn at random each race so drivers deploy in different places.
+     */
+    private double ersStyle = 0.5;
+
+    /** True once a tire is punctured (until the next pit stop). */
+    private boolean punctured;
 
     /** Seconds of time still to be lost from an incident or a defensive line. */
     private double timePenalty;
@@ -198,7 +210,8 @@ public final class Car {
     /**
      * Works out the speed this car wants at its current position.
      * The car's grip (tires times brake fade) picks the matching speed profile; push level,
-     * this race's pace factor and any ERS boost then scale it.
+     * this race's pace factor, ERS and DRS then scale it. A fight line can make the car brake later
+     * or cost it speed (see LinePlan), and a puncture slows it a lot.
      *
      * @param profiles speed profiles for this track
      * @param conditions current weather
@@ -212,7 +225,14 @@ public final class Car {
         if (retired) {
             return 0;
         }
-        double target = profiles.forCarGrip(currentGrip).speedAt(distance) * scale;
+        double shift = linePlan == null ? 0 : linePlan.brakeShift(distance);
+        double target = profiles.forCarGrip(currentGrip).speedAt(distance - shift) * scale;
+        if (linePlan != null) {
+            target *= linePlan.speedFactor(distance);
+        }
+        if (punctured) {
+            target *= Tuning.PUNCTURE_SPEED_FRACTION;
+        }
         if (timePenalty > 0) {
             target *= Tuning.PENALTY_SPEED_FRACTION;
         }
@@ -324,6 +344,10 @@ public final class Car {
      */
     public void steer(double line, double meters, double dt) {
         double before = lateralOffset;
+        if (linePlan != null && followLine) {
+            line = linePlan.lateralAt(distance, line);
+            onLine = false;
+        }
         if (followLine && onLine) {
             lateralOffset = line;
         } else {
@@ -392,67 +416,11 @@ public final class Car {
         return lateralRate;
     }
 
-    /**
-     * Starts a pass: this car and its partner move to opposite sides of the track.
-     *
-     * @param partner the other car in the pass
-     * @param attacking true if this car is the one passing
-     * @param lateral sideways offset to move to, in meters
-     */
-    public void beginPass(Car partner, boolean attacking, double lateral) {
-        passPartner = partner;
-        passAttacker = attacking;
-        passGranted = false;
-        passAborting = false;
-        setLateralTarget(lateral, Tuning.LATERAL_SPEED);
-    }
 
-    /**
-     * Pairs this car with an attacker without moving it (a defender that holds its line), so the
-     * two may run side by side.
-     *
-     * @param attacker the car attacking this one
-     */
-    public void pairWith(Car attacker) {
-        passPartner = attacker;
-        passAttacker = false;
-        passGranted = false;
-        passAborting = false;
-    }
 
-    /**
-     * Lets the attacker complete the pass: it gets a little extra speed until it is clear ahead.
-     */
-    public void grantPass() {
-        passGranted = true;
-        passAborting = false;
-    }
 
-    /**
-     * Makes the attacker give up: it backs off until it is safely behind its partner again.
-     */
-    public void abortPass() {
-        passGranted = false;
-        passAborting = true;
-    }
 
-    /**
-     * Returns whether this attacker has been granted the pass.
-     *
-     * @return true while completing a successful pass
-     */
-    public boolean isPassGranted() {
-        return passGranted;
-    }
 
-    /**
-     * Returns whether this attacker is backing off after a failed attack.
-     *
-     * @return true while dropping back
-     */
-    public boolean isPassAborting() {
-        return passAborting;
-    }
 
     /**
      * Sets where the car moves sideways and how fast.
@@ -480,19 +448,6 @@ public final class Car {
         return lateralTarget;
     }
 
-    /**
-     * Ends a pass and heads back to the racing line (unless the car is in the pit lane or retired,
-     * which keep their own sideways position).
-     */
-    public void endPass() {
-        passPartner = null;
-        passAttacker = false;
-        passGranted = false;
-        passAborting = false;
-        if (!isOffTrack()) {
-            returnToLine(Tuning.LATERAL_SPEED);
-        }
-    }
 
     /**
      * Asks to pit at a coming pit entry.
@@ -713,22 +668,130 @@ public final class Car {
         timePenalty += seconds;
     }
 
+
+
     /**
-     * Returns the other car in a pass under way.
+     * Sets the line this car drives through the coming corner in a fight (null for none). The car
+     * follows the plan's path instead of the plain racing line.
      *
-     * @return the partner, or null if not passing
+     * @param plan the plan, or null
      */
-    public Car getPassPartner() {
-        return passPartner;
+    public void setLinePlan(LinePlan plan) {
+        linePlan = plan;
+        if (plan != null) {
+            returnToLine(Tuning.PLAN_LATERAL_SPEED);
+        }
     }
 
     /**
-     * Returns whether this car is the one doing the passing.
+     * Returns the fight line for the coming corner.
      *
-     * @return true for the attacker in a pass
+     * @return the plan, or null
      */
-    public boolean isPassAttacker() {
-        return passAttacker;
+    public LinePlan getLinePlan() {
+        return linePlan;
+    }
+
+    /**
+     * Makes this car drop in behind another after losing a corner to it (null to stop).
+     *
+     * @param winner the car to give way to, or null
+     * @param now race time now
+     */
+    public void setYieldTo(Car winner, double now) {
+        yieldTo = winner;
+        yieldSince = now;
+    }
+
+    /**
+     * Returns when this car started giving way.
+     *
+     * @return race time in seconds
+     */
+    public double getYieldSince() {
+        return yieldSince;
+    }
+
+    /**
+     * Returns the car this car is giving way to.
+     *
+     * @return the car, or null
+     */
+    public Car getYieldTo() {
+        return yieldTo;
+    }
+
+    /**
+     * Lets this driver's line wander a little: a random nudge, a pull back toward the racing line,
+     * and a limit, so every driver takes a slightly different line and nobody is a copy.
+     *
+     * @param nudge random change this second, in meters
+     * @param range largest offset allowed now, in meters
+     */
+    public void updateLineBias(double nudge, double range) {
+        lineBias += nudge - lineBias * Tuning.LINE_BIAS_PULL_BACK;
+        lineBias = Math.max(-range, Math.min(range, lineBias));
+    }
+
+    /**
+     * Returns this driver's own offset from the racing line.
+     *
+     * @return offset in meters
+     */
+    public double getLineBias() {
+        return lineBias;
+    }
+
+    /**
+     * Sets the driver's start reaction.
+     *
+     * @param seconds delay after the lights go out
+     */
+    public void setLaunchDelay(double seconds) {
+        launchDelay = seconds;
+    }
+
+    /**
+     * Returns the driver's start reaction.
+     *
+     * @return delay after the lights go out, in seconds
+     */
+    public double getLaunchDelay() {
+        return launchDelay;
+    }
+
+    /**
+     * Sets how freely this driver spends its battery.
+     *
+     * @param style from 0 (saves it) to 1 (spends it)
+     */
+    public void setErsStyle(double style) {
+        ersStyle = style;
+    }
+
+    /**
+     * Returns how freely this driver spends its battery.
+     *
+     * @return from 0 (saves it) to 1 (spends it)
+     */
+    public double getErsStyle() {
+        return ersStyle;
+    }
+
+    /**
+     * Punctures a tire: the car must crawl back to the pits.
+     */
+    public void puncture() {
+        punctured = true;
+    }
+
+    /**
+     * Returns whether a tire is punctured.
+     *
+     * @return true until the next pit stop
+     */
+    public boolean isPunctured() {
+        return punctured;
     }
 
     /**
@@ -750,27 +813,27 @@ public final class Car {
     }
 
     /**
-     * Sets the stance planned for a coming corner.
+     * Sets the line planned for a coming corner.
      *
-     * @param stance the planned stance
+     * @param choice the planned line
      * @param cornerKey lap times 1000 plus corner number
      */
-    public void setIntent(Stance stance, int cornerKey) {
-        intent = stance;
+    public void setIntent(LineChoice choice, int cornerKey) {
+        intent = choice;
         intentKey = cornerKey;
     }
 
     /**
-     * Returns the planned stance.
+     * Returns the planned line.
      *
-     * @return the stance
+     * @return the line
      */
-    public Stance getIntent() {
+    public LineChoice getIntent() {
         return intent;
     }
 
     /**
-     * Returns which corner the planned stance is for.
+     * Returns which corner the planned line is for.
      *
      * @return lap times 1000 plus corner number, or -1
      */
@@ -877,6 +940,7 @@ public final class Car {
      * @param compound the new compound
      */
     public void fitTires(Compound compound) {
+        punctured = false;
         tire = new Tire(compound);
         usedCompounds.add(compound);
     }

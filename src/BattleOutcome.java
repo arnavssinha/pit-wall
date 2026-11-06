@@ -1,26 +1,23 @@
 /**
- * How a battle for one corner ended.
+ * How a fight for one corner ended.
  */
 public enum BattleOutcome {
 
     /** The attacker got past. */
     PASSED,
 
-    /** The attacker tried but the defender kept the place. */
+    /** The defender kept the place. */
     HELD,
 
-    /** The attacker chose Hold, so no move was made. */
+    /** The attacker chose to stay behind. */
     NO_ATTEMPT,
 
-    /** The attacker locked a wheel, lost time and stayed behind. */
+    /** A late-braking car locked its brakes and ran wide. */
     LOCKED_UP,
 
-    /** The attacker ran wide, lost more time and stayed behind. */
-    RAN_WIDE,
-
-    /** The cars touched; both lost time and the attacker stayed behind. */
+    /** The two cars touched; both lost time. */
     CONTACT,
 
-    /** The car ahead was lapped (or already finished) and let the faster car through. */
+    /** A lapped or finished car let a faster car through. */
     BLUE_FLAG
 }

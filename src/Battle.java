@@ -1,112 +1,159 @@
 /**
- * One fight for one corner between an attacker and the car just ahead of it.
- * A battle opens shortly before the corner's braking point, collects both drivers' stances
- * (the player's from the prompt, computer drivers' from the default policy), and is resolved
- * when the attacker reaches the braking point.
+ * One fight between two cars for one corner: the car behind (attacker) and the car ahead (defender)
+ * each choose a line (LineChoice) and whether to brake late. The choices become LinePlans that the
+ * cars actually drive; who gets the corner is then settled on the road (see BattleManager).
+ * When the player is in the fight, the battle also holds the player's pending choice.
  */
 public final class Battle {
 
-    /** The car trying to pass. */
+    /** The car behind. */
     private final Car attacker;
 
-    /** The car being attacked. */
+    /** The car ahead. */
     private final Car defender;
 
-    /** The corner being fought over. */
+    /** The corner fought over. */
     private final Corner corner;
 
-    /** Attacker distance (total meters) at which the battle is resolved: the braking point. */
-    private final double resolveAt;
-
-    /** Time gap between the cars when the battle opened, in seconds. */
-    private final double gapSeconds;
-
-    /** Race time when the battle opened. */
+    /** Race time the battle opened. */
     private final double openedAt;
 
-    /** True if the player's car is one of the two cars and the player is being asked to choose. */
+    /** Gap in seconds when the battle opened. */
+    private final double gapSeconds;
+
+    /** True if the player chooses a line in this battle. */
     private final boolean promptsPlayer;
 
-    /** The attacker's stance. */
-    private Stance attackerStance;
+    /** The attacker's line, or null until chosen. */
+    private LineChoice attackerLine;
 
-    /** The defender's stance. */
-    private Stance defenderStance;
+    /** True if the attacker brakes late. */
+    private boolean attackerLate;
 
-    /** True once the player's stance can no longer change. */
+    /** The defender's line, or null until chosen. */
+    private LineChoice defenderLine;
+
+    /** True if the defender brakes late. */
+    private boolean defenderLate;
+
+    /** True once the player has picked a line (or the choice was made for them). */
+    private boolean playerDecided;
+
+    /** True once the player's choice can no longer change. */
     private boolean playerLocked;
 
-    /** True once the attacker has pulled out to make its move (or been paired, for a Hold). */
-    private boolean attackerEngaged;
+    /** True once a computer attacker has switched sides because the door was shut. */
+    private boolean switchedSides;
 
-    /** True once the attacker has actually moved out of the slipstream to the side. */
-    private boolean pulledOut;
+    /** True if the attacker was already level or ahead before the corner (a drag pass on the straight). */
+    private boolean passedBeforeBraking;
 
-    /** True once the defender has reacted (covered the inside, or stayed on its line). */
-    private boolean defenderEngaged;
+    /** True if one of the cars locked up. */
+    private boolean lockUp;
 
-    /** How it ended, or null while open. */
+    /** True if the two cars touched. */
+    private boolean contact;
+
+    /** The result once over, or null. */
     private BattleOutcome outcome;
 
-    /** The one-line result shown on the radio. */
+    /** Radio text describing what happened. */
     private String message = "";
 
     /**
      * Opens a battle.
      *
-     * @param attacker the car trying to pass
+     * @param attacker the car behind
      * @param defender the car ahead
-     * @param corner the corner
-     * @param resolveAt attacker distance at which to resolve
-     * @param gapSeconds time gap at opening
-     * @param openedAt race time at opening
-     * @param promptsPlayer true if the player chooses a stance for this battle
+     * @param corner the corner fought over
+     * @param gapSeconds gap between them in seconds
+     * @param openedAt race time now
+     * @param promptsPlayer true if the player chooses a line
      */
-    public Battle(Car attacker, Car defender, Corner corner, double resolveAt, double gapSeconds,
-                  double openedAt, boolean promptsPlayer) {
+    public Battle(Car attacker, Car defender, Corner corner, double gapSeconds, double openedAt, boolean promptsPlayer) {
         this.attacker = attacker;
         this.defender = defender;
         this.corner = corner;
-        this.resolveAt = resolveAt;
         this.gapSeconds = gapSeconds;
         this.openedAt = openedAt;
         this.promptsPlayer = promptsPlayer;
     }
 
     /**
-     * Sets the player's stance, if the prompt is still open.
+     * Sets the player's line, unless the choice is locked.
      *
-     * @param stance the chosen stance
+     * @param line the chosen line
      */
-    public void choosePlayerStance(Stance stance) {
+    public void choosePlayerLine(LineChoice line) {
         if (!promptsPlayer || playerLocked || outcome != null) {
             return;
         }
-        if (attacker.isPlayer()) {
-            attackerStance = stance;
+        if (isPlayerAttacking()) {
+            attackerLine = line;
+        } else if (line != LineChoice.STAY_BEHIND) {
+            defenderLine = line;
+        }
+        playerDecided = true;
+    }
+
+    /**
+     * Switches the player's late braking on or off, unless the choice is locked.
+     */
+    public void togglePlayerLateBrake() {
+        if (!promptsPlayer || playerLocked || outcome != null) {
+            return;
+        }
+        if (isPlayerAttacking()) {
+            attackerLate = !attackerLate;
         } else {
-            defenderStance = stance;
+            defenderLate = !defenderLate;
         }
     }
 
     /**
-     * Ends the prompt: the player's stance can no longer change.
+     * Marks the player's choice as made (for example by the default when the timer runs out).
      */
-    public void lockPlayerStance() {
+    public void markPlayerDecided() {
+        playerDecided = true;
+    }
+
+    /**
+     * Locks the player's choice.
+     */
+    public void lockPlayer() {
         playerLocked = true;
+        playerDecided = true;
     }
 
     /**
-     * Returns the player's chosen stance.
+     * Returns whether the player is the attacker.
      *
-     * @return the stance, or null if not chosen yet
+     * @return true if the player's car is behind
      */
-    public Stance getPlayerStance() {
-        return attacker.isPlayer() ? attackerStance : defenderStance;
+    public boolean isPlayerAttacking() {
+        return attacker.isPlayer();
     }
 
     /**
-     * Returns the rival in a battle involving the player.
+     * Returns the player's line.
+     *
+     * @return the line, or null if not chosen
+     */
+    public LineChoice getPlayerLine() {
+        return isPlayerAttacking() ? attackerLine : defenderLine;
+    }
+
+    /**
+     * Returns whether the player brakes late.
+     *
+     * @return true for late braking
+     */
+    public boolean isPlayerLate() {
+        return isPlayerAttacking() ? attackerLate : defenderLate;
+    }
+
+    /**
+     * Returns the player's opponent.
      *
      * @return the other car
      */
@@ -115,87 +162,126 @@ public final class Battle {
     }
 
     /**
-     * Records the result.
+     * Returns the opponent's line.
      *
-     * @param result how it ended
-     * @param text the one-line message
+     * @return the line, or null
+     */
+    public LineChoice getRivalLine() {
+        return isPlayerAttacking() ? defenderLine : attackerLine;
+    }
+
+    /**
+     * Returns whether the opponent brakes late.
+     *
+     * @return true for late braking
+     */
+    public boolean isRivalLate() {
+        return isPlayerAttacking() ? defenderLate : attackerLate;
+    }
+
+    /**
+     * Sets the attacker's choice.
+     *
+     * @param line the line
+     * @param late true to brake late
+     */
+    public void setAttackerChoice(LineChoice line, boolean late) {
+        attackerLine = line;
+        attackerLate = late;
+    }
+
+    /**
+     * Sets the defender's choice.
+     *
+     * @param line the line
+     * @param late true to brake late
+     */
+    public void setDefenderChoice(LineChoice line, boolean late) {
+        defenderLine = line;
+        defenderLate = late;
+    }
+
+    /**
+     * Ends the battle.
+     *
+     * @param result the outcome
+     * @param text radio text
      */
     public void finish(BattleOutcome result, String text) {
         outcome = result;
         message = text;
         playerLocked = true;
+        playerDecided = true;
     }
 
     /**
-     * Records that the attacker has made its move.
+     * Records that a computer attacker switched sides.
      */
-    public void markAttackerEngaged() {
-        attackerEngaged = true;
+    public void markSwitchedSides() {
+        switchedSides = true;
     }
 
     /**
-     * Returns whether the attacker has made its move.
+     * Returns whether a computer attacker switched sides.
      *
-     * @return true once engaged
+     * @return true after a switch
      */
-    public boolean isAttackerEngaged() {
-        return attackerEngaged;
+    public boolean hasSwitchedSides() {
+        return switchedSides;
     }
 
     /**
-     * Records that the attacker has pulled out of the slipstream.
+     * Records a pass completed on the straight before the corner.
      */
-    public void markPulledOut() {
-        pulledOut = true;
+    public void markPassedBeforeBraking() {
+        passedBeforeBraking = true;
     }
 
     /**
-     * Returns whether the attacker has pulled out of the slipstream.
+     * Returns whether the pass was completed on the straight.
      *
-     * @return true once pulled out
+     * @return true for a drag pass
      */
-    public boolean isPulledOut() {
-        return pulledOut;
+    public boolean wasPassedBeforeBraking() {
+        return passedBeforeBraking;
     }
 
     /**
-     * Records that the defender has reacted.
+     * Records a lock-up by either car.
      */
-    public void markDefenderEngaged() {
-        defenderEngaged = true;
+    public void markLockUp() {
+        lockUp = true;
     }
 
     /**
-     * Returns whether the defender has reacted.
+     * Returns whether either car locked up.
      *
-     * @return true once engaged
+     * @return true after a lock-up
      */
-    public boolean isDefenderEngaged() {
-        return defenderEngaged;
+    public boolean hadLockUp() {
+        return lockUp;
     }
 
     /**
-     * Sets the attacker's stance.
-     *
-     * @param stance the stance
+     * Records contact between the cars.
      */
-    public void setAttackerStance(Stance stance) {
-        attackerStance = stance;
+    public void markContact() {
+        contact = true;
     }
 
     /**
-     * Sets the defender's stance.
+     * Returns whether the cars touched.
      *
-     * @param stance the stance
+     * @return true after contact
      */
-    public void setDefenderStance(Stance stance) {
-        defenderStance = stance;
+    public boolean hadContact() {
+        return contact;
     }
 
     /**
      * Returns the attacker.
      *
-     * @return the attacking car
+     * @return the car behind
      */
     public Car getAttacker() {
         return attacker;
@@ -204,7 +290,7 @@ public final class Battle {
     /**
      * Returns the defender.
      *
-     * @return the defending car
+     * @return the car ahead
      */
     public Car getDefender() {
         return defender;
@@ -220,16 +306,7 @@ public final class Battle {
     }
 
     /**
-     * Returns the attacker distance at which the battle resolves.
-     *
-     * @return total meters
-     */
-    public double getResolveAt() {
-        return resolveAt;
-    }
-
-    /**
-     * Returns the time gap when the battle opened.
+     * Returns the gap when the battle opened.
      *
      * @return seconds
      */
@@ -238,25 +315,34 @@ public final class Battle {
     }
 
     /**
-     * Returns the race time when the battle opened.
+     * Returns when the battle opened.
      *
-     * @return seconds
+     * @return race time in seconds
      */
     public double getOpenedAt() {
         return openedAt;
     }
 
     /**
-     * Returns whether the player is choosing a stance for this battle.
+     * Returns whether the player chooses a line.
      *
-     * @return true for a player prompt
+     * @return true for the player's battles
      */
     public boolean promptsPlayer() {
         return promptsPlayer;
     }
 
     /**
-     * Returns whether the player's stance is locked.
+     * Returns whether the player has made a choice.
+     *
+     * @return true once decided
+     */
+    public boolean isPlayerDecided() {
+        return playerDecided;
+    }
+
+    /**
+     * Returns whether the player's choice is locked.
      *
      * @return true once locked
      */
@@ -265,25 +351,43 @@ public final class Battle {
     }
 
     /**
-     * Returns the attacker's stance.
+     * Returns the attacker's line.
      *
-     * @return the stance, or null if not set
+     * @return the line, or null
      */
-    public Stance getAttackerStance() {
-        return attackerStance;
+    public LineChoice getAttackerLine() {
+        return attackerLine;
     }
 
     /**
-     * Returns the defender's stance.
+     * Returns whether the attacker brakes late.
      *
-     * @return the stance, or null if not set
+     * @return true for late braking
      */
-    public Stance getDefenderStance() {
-        return defenderStance;
+    public boolean isAttackerLate() {
+        return attackerLate;
     }
 
     /**
-     * Returns how the battle ended.
+     * Returns the defender's line.
+     *
+     * @return the line, or null
+     */
+    public LineChoice getDefenderLine() {
+        return defenderLine;
+    }
+
+    /**
+     * Returns whether the defender brakes late.
+     *
+     * @return true for late braking
+     */
+    public boolean isDefenderLate() {
+        return defenderLate;
+    }
+
+    /**
+     * Returns the outcome.
      *
      * @return the outcome, or null while open
      */
@@ -292,18 +396,18 @@ public final class Battle {
     }
 
     /**
-     * Returns whether the battle has been resolved.
+     * Returns whether the battle is over.
      *
-     * @return true once resolved
+     * @return true once finished
      */
     public boolean isResolved() {
         return outcome != null;
     }
 
     /**
-     * Returns the result message.
+     * Returns the radio text.
      *
-     * @return the message, empty while open
+     * @return the message
      */
     public String getMessage() {
         return message;

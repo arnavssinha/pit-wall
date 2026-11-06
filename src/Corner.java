@@ -79,8 +79,14 @@ public final class Corner {
             }
             double drop = speedAtSample(track, profile, brake) - speedAtSample(track, profile, apexIndex);
             double brakeDistance = track.getSample(brake).getDistance();
-            boolean sameComplex = !corners.isEmpty() && track.wrap(brakeDistance
-                    - corners.get(corners.size() - 1).getApex()) < Tuning.CORNER_MERGE_METERS;
+            boolean sameComplex = false;
+            if (!corners.isEmpty()) {
+                double afterLastApex = track.wrap(brakeDistance - corners.get(corners.size() - 1).getApex());
+                if (afterLastApex > track.getLapLength() / 2) {
+                    afterLastApex -= track.getLapLength();
+                }
+                sameComplex = afterLastApex < Tuning.CORNER_MERGE_METERS;
+            }
             if (drop >= Tuning.CORNER_MIN_SPEED_DROP && !sameComplex) {
                 double difficulty = Math.max(0, Math.min(1, 1.0 - drop / Tuning.CORNER_EASY_SPEED_DROP));
                 TrackSample apex = track.getSample(apexIndex);

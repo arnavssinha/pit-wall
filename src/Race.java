@@ -156,6 +156,8 @@ public final class Race {
             car.setTireLifeScale(RaceLength.tireLifeScale(config.getLaps()));
             double spread = Tuning.AI_AGGRESSION_MAX - Tuning.AI_AGGRESSION_MIN;
             car.setAggression(Tuning.AI_AGGRESSION_MIN + random.nextDouble() * spread);
+            car.setLaunchDelay(Tuning.LAUNCH_DELAY_MIN + random.nextDouble() * Tuning.LAUNCH_DELAY_SPREAD);
+            car.setErsStyle(random.nextDouble());
             cars.add(car);
             standings.add(car);
             if (isPlayer) {
@@ -212,8 +214,10 @@ public final class Race {
         }
         handleEvents();
         if (Math.floor(time) != Math.floor(time - dt)) {
+            double biasRange = leader().getLapsCompleted() == 0 ? Tuning.LINE_BIAS_START_RANGE : Tuning.LINE_BIAS_RANGE;
             for (Car car : cars) {
                 car.updateForm(random.nextGaussian() * Tuning.FORM_STEP);
+                car.updateLineBias(random.nextGaussian() * Tuning.LINE_BIAS_STEP, biasRange);
             }
         }
         conditions.update(dt, rain == null ? 0 : rain.intensityAt(time));
@@ -234,7 +238,7 @@ public final class Race {
             Car car = cars.get(i);
             double before = car.getDistance();
             car.advance(moves[i], dt);
-            car.steer(track.lineAt(car.getDistance()), moves[i], dt);
+            car.steer(personalLine(car), moves[i], dt);
         }
         keepSideBySideRoom(lateralBefore);
         for (int i = 0; i < n; i++) {
@@ -265,13 +269,32 @@ public final class Race {
     /**
      * Stops cars from sliding sideways into a car they are running alongside. Only the nearest cars
      * on the road can overlap, so each car checks a few neighbours either side in the road order.
-     * For every pair that overlaps lengthwise and was clear sideways before this step, a car that moved too close is
-     * pushed back so the gap stays at least the clearance they need, on the side it was on.
+     * For every pair that overlaps lengthwise and was side by side before this step, a car that moved too
+     * close is pushed back so the gap stays at least the clearance they need (or, if they were already a
+     * little closer than that, at least as wide as it was), on the side it was on. The car that moved
+     * toward the other is the one moved back (each in proportion to how far it moved), and a car already
+     * at the track edge cannot go further, so the other car takes the rest.
      * A car parked in its box and another team's car are left alone: the parked car is out of the way.
      *
      * @param lateralBefore each car's sideways position before this step, by car id
      */
     private void keepSideBySideRoom(double[] lateralBefore) {
+        for (int pass = 0; pass < Tuning.SIDE_BY_SIDE_PASSES; pass++) {
+            if (!keepRoomOnce(lateralBefore)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * One pass of the side-by-side check (see keepSideBySideRoom). Several passes are needed when three
+     * cars are squeezed together, because pushing one car away from a second can push it into a third.
+     *
+     * @param lateralBefore each car's sideways position before this step, by car id
+     * @return true if any car was pushed
+     */
+    private boolean keepRoomOnce(double[] lateralBefore) {
+        boolean pushedAny = false;
         int n = roadOrder.size();
         int reach = Math.min(Tuning.SIDE_BY_SIDE_NEIGHBOURS, n - 1);
         for (Car car : cars) {
@@ -283,17 +306,49 @@ public final class Race {
                 }
                 boolean overlapping = trackGap(car, other) < Tuning.MIN_SEPARATION
                         || trackGap(other, car) < Tuning.MIN_SEPARATION;
-                double needed = clearanceBetween(car, other);
                 double wasApart = lateralBefore[car.getId()] - lateralBefore[other.getId()];
-                if (!overlapping || Math.abs(wasApart) < needed) {
+                if (!overlapping || Math.abs(wasApart) < Tuning.CAR_WIDTH / 2) {
                     continue;
                 }
+                double needed = Math.min(clearanceBetween(car, other), Math.abs(wasApart));
                 double apart = car.getLateralOffset() - other.getLateralOffset();
                 if (Math.abs(apart) < needed || Math.signum(apart) != Math.signum(wasApart)) {
-                    car.nudgeLateral(other.getLateralOffset() + Math.signum(wasApart) * (needed + NUDGE_MARGIN));
+                    double sign = Math.signum(wasApart);
+                    double carMoved = Math.max(0, (lateralBefore[car.getId()] - car.getLateralOffset()) * sign);
+                    double otherMoved = Math.max(0, (other.getLateralOffset() - lateralBefore[other.getId()]) * sign);
+                    if (carMoved + otherMoved < 1e-9) {
+                        carMoved = 1;
+                        otherMoved = 1;
+                    }
+                    double deficit = needed + NUDGE_MARGIN - apart * sign;
+                    double carShare = deficit * carMoved / (carMoved + otherMoved);
+                    double carWanted = car.getLateralOffset() + sign * carShare;
+                    double carKept = keepOnTrack(car, carWanted);
+                    double otherWanted = other.getLateralOffset() - sign * (deficit - carShare) - (carWanted - carKept);
+                    double otherKept = keepOnTrack(other, otherWanted);
+                    car.nudgeLateral(carKept - (otherWanted - otherKept));
+                    other.nudgeLateral(otherKept);
+                    pushedAny = true;
                 }
             }
         }
+        return pushedAny;
+    }
+
+    /**
+     * Keeps a pushed car inside the track edges (a car in the pit lane or parked off the track is left
+     * where it is pushed).
+     *
+     * @param car the car
+     * @param lateral where it is being pushed to
+     * @return the sideways position it may have
+     */
+    private static double keepOnTrack(Car car, double lateral) {
+        if (car.isOffTrack()) {
+            return lateral;
+        }
+        double limit = Tuning.TRACK_WIDTH / 2 - Tuning.CAR_WIDTH / 2;
+        return Math.max(-limit, Math.min(limit, lateral));
     }
 
     /**
@@ -375,9 +430,11 @@ public final class Race {
      * @return true if the car was retired
      */
     private boolean retire(Car car, String reason) {
-        if (car.isFinished() || car.isRetired() || car.isInPitLane() || car.getPassPartner() != null) {
+        if (car.isFinished() || car.isRetired() || car.isInPitLane()) {
             return false;
         }
+        car.setLinePlan(null);
+        car.setYieldTo(null, time);
         car.retire(-track.getProfile().getPitSide());
         addMessage((car.isPlayer() ? "Your car" : car.getDriver().getCode()) + " " + reason + ".", true);
         return true;
@@ -469,9 +526,11 @@ public final class Race {
 
     /**
      * Decides how far one car moves this step.
-     * The car aims for the profile speed, gets a tow in the slipstream, speeds up (attacker) or
-     * eases off (defender) during a pass, eases off to follow a close car ahead, and is finally
-     * clamped so it can never get nearer than the minimum separation to the car blocking it.
+     * The car aims for its own target speed (profile, push, ERS, DRS, fight line), loses a little grip
+     * in another car's dirty air through corners, gets a tow on straights when it is right in another
+     * car's wake, gives way to a car it has lost a corner to, eases off to follow a close car ahead, and
+     * is finally clamped so it can never get nearer than the minimum separation to the car blocking it.
+     * Nothing here hands a car extra speed for an overtake: passes come only from these effects.
      *
      * @param car the car
      * @param dt time step in seconds
@@ -479,36 +538,51 @@ public final class Race {
      */
     private double planMove(Car car, double dt) {
         double target = Math.min(car.targetSpeed(profiles, conditions), pitLane.speedLimit(car));
+        if (time < car.getLaunchDelay()) {
+            target = 0;
+        }
         Car ahead = blockingCarAhead(car);
         double gap = ahead == null ? Double.MAX_VALUE : trackGap(car, ahead);
         if (!car.isInPitLane()) {
             target *= safetyCar.paceFactor(car == leader(), gap);
         }
-        Car partner = car.getPassPartner();
-        if (partner != null && car.isPassGranted()) {
-            target = Math.max(target * (1 + Tuning.PASS_SPEED_BONUS), partner.getSpeed() + Tuning.PASS_MIN_CLOSING);
-        } else if (partner != null && car.isPassAborting()) {
-            target = Math.min(target * (1 - Tuning.ABORT_SLOWDOWN), partner.getSpeed() - Tuning.PASS_YIELD_SPEED);
-        } else if (partner != null && !car.isPassAttacker() && partner.isPassGranted()) {
-            target = Math.min(target * (1 - Tuning.PASS_DEFENDER_SLOW), partner.getSpeed() - Tuning.PASS_YIELD_SPEED);
+        Car front = carAheadOnTrack(car);
+        double frontGap = front == null ? Double.MAX_VALUE : trackGap(car, front);
+        boolean straight = onStraight(car);
+        if (front != null && !car.isInPitLane() && !front.isInPitLane()) {
+            double inWake = Math.max(0, 1 - Math.abs(car.getLateralOffset() - front.getLateralOffset()) / Tuning.LATERAL_CLEARANCE);
+            double seconds = frontGap / Math.max(1, car.getSpeed());
+            if (!straight && seconds < Tuning.DIRTY_AIR_SECONDS) {
+                target *= 1 - Tuning.DIRTY_AIR_LOSS * inWake * (1 - seconds / Tuning.DIRTY_AIR_SECONDS);
+            }
+            double tow = 1 + (slipstreamFactor(frontGap, car.getSpeed(), straight) - 1) * inWake;
+            if (tow > 1.0) {
+                target *= tow;
+                car.applyTow(tow);
+            }
         }
-        target = Math.max(0, target);
+        Car winner = car.getYieldTo();
+        if (winner != null) {
+            double floor = target * Tuning.YIELD_FLOOR_FRACTION;
+            target = Math.min(target, Math.max(floor, winner.getSpeed() - Tuning.PASS_YIELD_SPEED));
+        }
+        LinePlan plan = car.getLinePlan();
+        boolean attackingFront = plan != null && plan.isAttacker() && plan.getChoice().leavesLine();
+        boolean racingFront = front != null && !front.isInPitLane() && !car.isInPitLane() && !front.isRetired()
+                && front != winner && car.getYieldTo() == null && !front.isFinished();
+        if (racingFront && !attackingFront) {
+            double keep = plan != null && plan.getChoice() == LineChoice.STAY_BEHIND
+                    ? Tuning.STAY_BEHIND_GAP_SECONDS : Tuning.FOLLOW_TIME_GAP;
+            if (frontGap < Tuning.MIN_SEPARATION + car.getSpeed() * keep) {
+                double drop = frontGap < Tuning.MIN_SEPARATION ? Tuning.OVERLAP_DROP_SPEED : 0;
+                target = Math.min(target, front.getSpeed() - drop);
+            }
+        }
         if (car.getPitPhase() == PitPhase.MERGING && hasCarAlongside(car, true)) {
             target *= 1 - Tuning.ABORT_SLOWDOWN;
         }
-        double tow = slipstreamFactor(gap, car.getSpeed(), onStraight(car));
-        if (partner != null && car.isPassAttacker() && !car.isPassAborting()) {
-            double toPartner = trackGap(car, partner);
-            if (toPartner < track.getLapLength() / 2) {
-                tow = Math.max(tow, slipstreamFactor(toPartner, car.getSpeed(), onStraight(car)));
-            }
-        }
-        if (tow > 1.0) {
-            target *= tow;
-            car.applyTow(tow);
-        }
-        boolean attackingIt = ahead != null && ahead == partner && car.isPassAttacker() && !car.isPassAborting();
-        if (ahead != null && !attackingIt) {
+        target = Math.max(0, target);
+        if (ahead != null) {
             double comfortable = Tuning.MIN_SEPARATION + car.getSpeed() * Tuning.FOLLOW_TIME_GAP;
             if (gap < comfortable) {
                 target = Math.min(target, ahead.getSpeed());
@@ -522,6 +596,18 @@ public final class Race {
             car.capSpeed(ahead.getSpeed());
         }
         return move;
+    }
+
+    /**
+     * Returns the line this car normally drives here: the racing line plus the driver's own small
+     * offset, kept inside the track.
+     *
+     * @param car the car
+     * @return sideways position in meters from the centerline
+     */
+    public double personalLine(Car car) {
+        double limit = Tuning.TRACK_WIDTH / 2 - Tuning.RACING_LINE_EDGE_MARGIN;
+        return Math.max(-limit, Math.min(limit, track.lineAt(car.getDistance()) + car.getLineBias()));
     }
 
     /**
@@ -657,17 +743,15 @@ public final class Race {
         if (safetyCar.isActive()) {
             return false;
         }
-        return car.isPlayer() ? car.isErsWanted() : AiDriver.wantsDeploy(car);
+        return car.isPlayer() ? car.isErsWanted() : AiDriver.wantsDeploy(car, track.wrap(car.getDistance()));
     }
 
     /**
-     * Finds the car that limits how far a car may move: the nearest car ahead on the road, except a
-     * car that is far enough to the side to be alongside safely, which is allowed only for a passing
-     * partner, for one car off the racing line (pit lane or retired) next to one on it, for any
-     * car next to a retired car parked at the side, and for two cars in the pit lane (one parked in
-     * its box while the other drives past), and for a car that has finished next to one still racing
-     * or for two finished cars (a pass cannot carry on over the finish line). A car parked in its pit
-     * box never blocks another team's car at all.
+     * Finds the car that limits how far a car may move: the nearest car ahead on the road that is not
+     * far enough to the side to be alongside safely. Any two cars may run side by side when there is
+     * room (that is how cars draw alongside and pass, even two or three at a time); the corner rules
+     * in BattleManager then decide who gets the corner. A car parked in its pit box never blocks
+     * another team's car at all.
      *
      * @param car the car
      * @return the blocking car, or null
@@ -680,10 +764,7 @@ public final class Race {
             if (parkedApart(car, other)) {
                 continue;
             }
-            boolean mayBeAlongside = other == car.getPassPartner() || car.isOffTrack() != other.isOffTrack()
-                    || car.isRetired() || other.isRetired() || (car.isInPitLane() && other.isInPitLane())
-                    || car.isFinished() || other.isFinished();
-            if (!(mayBeAlongside && sideBySide(car, other))) {
+            if (!sideBySide(car, other)) {
                 return other;
             }
         }
