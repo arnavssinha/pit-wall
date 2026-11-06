@@ -147,7 +147,8 @@ public final class TimingTower extends GCompound {
     }
 
     /**
-     * Builds the gap text for one row: "Leader", "+1.234" seconds, or "+1 LAP".
+     * Builds the gap text for one row: "Leader", "+1.234" seconds, or "+1 LAP". Just after the start,
+     * when cars have no timing yet, the gap is shown in meters.
      *
      * @param car the car in this row
      * @param position row index, 0 for the leader
@@ -169,6 +170,10 @@ public final class TimingTower extends GCompound {
         int lapsDown = race.lapsBehindLeader(car);
         if (lapsDown > 0) {
             return "+" + lapsDown + (lapsDown == 1 ? " LAP" : " LAPS");
+        }
+        if (race.getTime() < Tuning.START_GAP_IN_METERS_SECONDS) {
+            double meters = race.getStandings().get(0).getDistance() - car.getDistance();
+            return String.format(Locale.ROOT, "+%.0f m", Math.max(0, meters));
         }
         return String.format(Locale.ROOT, "+%.3f", race.gapToLeader(car));
     }

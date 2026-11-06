@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 
 /**
@@ -42,6 +43,12 @@ public final class BattleManager {
     /** Race time the player last completed a pass (a next attack straight after is offered at once). */
     private double lastPlayerPassTime = -Double.MAX_VALUE;
 
+    /** True once the start lines into the first corner have been planned. */
+    private boolean startPlanned;
+
+    /** The player's line into the first corner. */
+    private LineChoice startLine = LineChoice.OPTIMAL;
+
     /** True when the player pressed the attack key and the request has not been handled yet. */
     private boolean attackRequested;
 
@@ -73,10 +80,14 @@ public final class BattleManager {
         }
         if (attackRequested) {
             attackRequested = false;
-            if (!maybeOpen(race.getPlayerCar(), true)) {
-                race.addMessage("No car close enough to attack (within "
-                        + Tuning.ON_DEMAND_ATTACK_GAP + " s), or already fighting.", true);
-            }
+            handleOvertakeRequest();
+        }
+        if (!startPlanned) {
+            startPlanned = true;
+            planStart();
+        }
+        if (race.isStartPhase()) {
+            return;
         }
         for (Car car : race.getCars()) {
             maybeOpen(car, false);
@@ -113,6 +124,65 @@ public final class BattleManager {
     }
 
     /**
+     * Gives every car a line into the first corner, taken straight off the grid so the field fans out
+     * two and three wide, which makes the start a real chance to gain places:
+     * computer drivers pick Inside, Optimal or Outside and sometimes brake late; the player's line comes
+     * from the A / S / D keys during the start (Optimal until chosen).
+     */
+    private void planStart() {
+        Corner first = race.getStartCorner();
+        if (first == null) {
+            return;
+        }
+        for (Car car : race.getCars()) {
+            LineChoice line;
+            boolean late;
+            if (car.isPlayer()) {
+                line = preselected != null ? preselected : LineChoice.OPTIMAL;
+                preselected = null;
+                late = false;
+                startLine = line;
+            } else {
+                double roll = random.nextDouble();
+                line = roll < Tuning.START_INSIDE_SHARE ? LineChoice.INSIDE
+                        : roll < Tuning.START_INSIDE_SHARE + Tuning.START_OUTSIDE_SHARE ? LineChoice.OUTSIDE : LineChoice.OPTIMAL;
+                late = random.nextDouble() < Tuning.START_LATE_BRAKE_SHARE * (0.5 + car.getAggression());
+            }
+            LinePlan plan = new LinePlan(line, first, late, true, car.getDistance(), true, race.getTrack());
+            plan.markStart();
+            car.setLinePlan(plan);
+        }
+    }
+
+    /**
+     * Changes the player's line into the first corner during the start (before the braking point).
+     *
+     * @param line the line
+     * @param late true to brake late (the Overtake boost)
+     */
+    private void replanStart(LineChoice line, boolean late) {
+        Car player = race.getPlayerCar();
+        Corner first = race.getStartCorner();
+        LinePlan current = player.getLinePlan();
+        if (first == null || (current != null && player.getDistance() >= current.getBrakeAt())) {
+            return;
+        }
+        startLine = line;
+        LinePlan plan = new LinePlan(line, first, late, true, player.getDistance(), true, race.getTrack());
+        plan.markStart();
+        player.setLinePlan(plan);
+    }
+
+    /**
+     * Returns the player's line into the first corner.
+     *
+     * @return the line
+     */
+    public LineChoice getStartLine() {
+        return startLine;
+    }
+
+    /**
      * Fills in the choices that are due: computer drivers choose at once (a defender facing the player
      * waits to see the player's line), and the player's default is used once the choice is locked.
      *
@@ -123,7 +193,7 @@ public final class BattleManager {
         Car d = battle.getDefender();
         double gap = gapSeconds(a, d);
         if (battle.promptsPlayer() && battle.isPlayerLocked() && battle.getPlayerLine() == null) {
-            LineChoice fallback = LineChoicePolicy.playerDefault(race.getPlayerCar(), gap, battle.isPlayerAttacking());
+            LineChoice fallback = LineChoicePolicy.playerDefault(battle.isPlayerAttacking(), battle.isOvertake());
             battle.choosePlayerLine(fallback);
             battle.markPlayerDecided();
             if (battle.getPlayerLine() == null) {
@@ -134,6 +204,11 @@ public final class BattleManager {
             LineChoice line = a.getIntentKey() == cornerKey(a, battle.getCorner()) ? a.getIntent()
                     : LineChoicePolicy.attackerLine(a, d, gap, random);
             battle.setAttackerChoice(line, LineChoicePolicy.lateBrake(a, line, random));
+            boolean boost = line.leavesLine()
+                    && random.nextDouble() < Tuning.AI_OVERTAKE_USE * (0.5 + a.getAggression());
+            if (boost && race.tryOvertake(a)) {
+                battle.markOvertake();
+            }
         }
         boolean attackerKnown = battle.getAttackerLine() != null && (!a.isPlayer() || battle.isPlayerDecided());
         if (battle.getDefenderLine() == null && !d.isPlayer() && attackerKnown) {
@@ -157,6 +232,38 @@ public final class BattleManager {
                 battle.lockPlayer();
             }
         }
+    }
+
+    /**
+     * Handles the player's Overtake key: in a fight as the attacker it switches the boost on for that
+     * fight; otherwise it opens a fight with the car ahead (if close enough) and switches the boost on.
+     * The player then picks a line (A, S or D).
+     */
+    private void handleOvertakeRequest() {
+        Car player = race.getPlayerCar();
+        if (race.isStartPhase()) {
+            if (race.tryOvertake(player)) {
+                replanStart(startLine, true);
+            }
+            return;
+        }
+        boolean attacking = playerBattle != null && !playerBattle.isResolved() && playerBattle.isPlayerAttacking();
+        if (!attacking && !maybeOpen(player, true)) {
+            race.addMessage("No car close enough to overtake (within " + Tuning.ON_DEMAND_ATTACK_GAP + " s).", true);
+            return;
+        }
+        if (playerBattle == null || !playerBattle.isPlayerAttacking() || playerBattle.isResolved()) {
+            return;
+        }
+        if (playerBattle.isOvertake()) {
+            return;
+        }
+        if (!race.tryOvertake(player)) {
+            race.addMessage(String.format(Locale.ROOT, "Not enough boost: it needs %.0f%% of the battery.",
+                    Tuning.OVERTAKE_COST * 100), true);
+            return;
+        }
+        playerBattle.markOvertake();
     }
 
     /**
@@ -454,12 +561,26 @@ public final class BattleManager {
         }
         boolean playerInvolved = attacker.isPlayer() || defender.isPlayer();
         boolean chained = race.getTime() - lastPlayerPassTime < Tuning.CHAIN_ATTACK_SECONDS;
-        boolean prompt = playerInvolved
+        LineChoice aiAttack = null;
+        if (!attacker.isPlayer()) {
+            aiAttack = attacker.getIntentKey() == key ? attacker.getIntent()
+                    : LineChoicePolicy.attackerLine(attacker, defender, gap, random);
+        }
+        boolean realAttack = attacker.isPlayer() || aiAttack.leavesLine();
+        boolean prompt = playerInvolved && realAttack
                 && (onDemand || chained || race.getTime() - lastPromptTime >= Tuning.PROMPT_COOLDOWN_SECONDS);
         Battle battle = new Battle(attacker, defender, corner, gap, race.getTime(), prompt);
+        if (aiAttack != null) {
+            battle.setAttackerChoice(aiAttack, LineChoicePolicy.lateBrake(attacker, aiAttack, random));
+            boolean boost = aiAttack.leavesLine()
+                    && random.nextDouble() < Tuning.AI_OVERTAKE_USE * (0.5 + attacker.getAggression());
+            if (boost && race.tryOvertake(attacker)) {
+                battle.markOvertake();
+            }
+        }
         if (playerInvolved && !prompt) {
             Car player = race.getPlayerCar();
-            LineChoice line = LineChoicePolicy.playerDefault(player, gap, attacker.isPlayer());
+            LineChoice line = LineChoicePolicy.playerDefault(attacker.isPlayer(), false);
             if (attacker.isPlayer()) {
                 battle.setAttackerChoice(line, false);
             } else {
@@ -627,6 +748,10 @@ public final class BattleManager {
      * @param line the chosen line
      */
     public void choosePlayerLine(LineChoice line) {
+        if (startPlanned && race.isStartPhase()) {
+            replanStart(line, race.getPlayerCar().isOvertakeActive());
+            return;
+        }
         if (playerBattle != null && !playerBattle.isResolved() && !playerBattle.isPlayerLocked()) {
             playerBattle.choosePlayerLine(line);
         } else {
@@ -644,9 +769,9 @@ public final class BattleManager {
     }
 
     /**
-     * Asks to attack the car ahead now (the player's attack key); handled at the next step.
+     * Asks for the Overtake boost (the player's Overtake key); handled at the next step.
      */
-    public void requestPlayerAttack() {
+    public void requestPlayerOvertake() {
         attackRequested = true;
     }
 

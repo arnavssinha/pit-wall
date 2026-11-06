@@ -11,8 +11,8 @@ public enum PushLevel {
     /** The normal race pace everything else is tuned around. */
     BALANCED("Balanced", 1.000, 1.00, 1.00),
 
-    /** Attack the lap: about 2 percent faster, tires wear about twice as fast and run much hotter. */
-    PUSH("Push", 1.020, 1.42, 1.09);
+    /** Attack the lap: about 3 percent faster, tires wear about twice as fast and run much hotter. */
+    PUSH("Push", 1.030, 1.42, 1.09);
 
     /** Name shown to the player. */
     private final String displayName;

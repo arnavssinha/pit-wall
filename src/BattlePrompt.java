@@ -7,13 +7,16 @@ import java.awt.Font;
 import java.util.Locale;
 
 /**
- * The panel shown while the player is in a fight. Attacking and defending have their own layouts:
- * an attacker chooses Inside, Optimal (sit in the tow, better exit), Outside or Stay behind; a defender
- * chooses Cover inside, Optimal or Cover outside. Each button carries the color of its line drawn on
- * the track (LinePreview), and L switches late braking on or off. Below the buttons the panel lists
- * the factors that decide the fight (gap, straight-line speed and why, grip and tires, battery, the
- * corner, lock-up risk, the rival's line), each colored green when it favors the player and red when
- * it favors the rival. It never shows a success percentage: the player reads the factors.
+ * The one panel for every decision the player makes on track, kept short and in the same place:
+ * <ul>
+ * <li>Attack: a car ahead is in range. One big SHIFT OVERTAKE button (battery boost, DRS on a DRS
+ * straight, late braking). After pressing it, the three lines appear: A Inside, S Optimal, D Outside.</li>
+ * <li>Defend: a car behind is attacking. The three lines appear at once: A Cover inside, S Optimal,
+ * D Cover outside.</li>
+ * <li>Start: the five red lights, SHIFT to launch when they go out, then the line into Turn 1.</li>
+ * </ul>
+ * Each line button has the color of its line drawn on the track. Three short facts sit under the
+ * buttons (speed, grip, battery and DRS), green when they favor the player and red when not.
  */
 public final class BattlePrompt extends GCompound {
 
@@ -24,58 +27,55 @@ public final class BattlePrompt extends GCompound {
     public static final double WIDTH = 600;
 
     /** Panel height in pixels. */
-    public static final double HEIGHT = 232;
+    public static final double HEIGHT = 150;
 
     /** Width of the countdown bar. */
     private static final double BAR_WIDTH = WIDTH - 24;
 
-    /** Button width. */
-    private static final double BUTTON_W = 140;
+    /** Width of a line button. */
+    private static final double BUTTON_W = 186;
 
-    /** Number of factor rows. */
-    private static final int FACTORS = 6;
+    /** Number of start lights. */
+    public static final int LIGHTS = 5;
 
-    /** Top of the factor rows. */
-    private static final double FACTOR_TOP = 128;
-
-    /** Space between factor rows. */
-    private static final double FACTOR_STEP = 15;
-
-    /** Speed difference (km/h) below which the straight-line speed counts as even. */
+    /** Speed difference (km/h) below which speed counts as even. */
     private static final double EVEN_SPEED = 3;
 
     /** Grip difference below which grip counts as even. */
     private static final double EVEN_GRIP = 0.01;
 
-    /** Colored frame (red when attacking, blue when defending). */
+    /** The line choices in button order. */
+    private static final LineChoice[] ORDER = {LineChoice.INSIDE, LineChoice.OPTIMAL, LineChoice.OUTSIDE};
+
+    /** Keys in button order. */
+    private static final String[] KEYS = {"A", "S", "D"};
+
+    /** Frame, colored by the kind of decision. */
     private final GRect frame;
 
     /** Title line. */
     private final GLabel headline;
 
-    /** Line under the title: what kind of corner it is. */
-    private final GLabel cornerLine;
+    /** The three line buttons. */
+    private final UiButton[] lines = new UiButton[3];
 
-    /** The four choice buttons (Inside, Optimal, Outside, Stay behind). */
-    private final UiButton[] choices = new UiButton[4];
+    /** The Overtake button. */
+    private final UiButton overtake;
 
-    /** Late braking switch. */
-    private final UiButton late;
+    /** What the Overtake button does. */
+    private final GLabel overtakeHint;
 
-    /** The factor rows. */
-    private final GLabel[] factors = new GLabel[FACTORS];
+    /** The start lights. */
+    private final GRect[] lights = new GRect[LIGHTS];
+
+    /** The three facts under the buttons. */
+    private final GLabel[] facts = new GLabel[3];
 
     /** Countdown bar for the decision. */
     private final GRect countdown;
 
-    /** Bottom line: time left, the choice, or the result. */
+    /** Bottom line: what happens next, or the result. */
     private final GLabel footer;
-
-    /** The choices in button order. */
-    private static final LineChoice[] ORDER = {LineChoice.INSIDE, LineChoice.OPTIMAL, LineChoice.OUTSIDE, LineChoice.STAY_BEHIND};
-
-    /** Keys in button order. */
-    private static final String[] KEYS = {"A", "S", "O", "D"};
 
     /**
      * Builds the panel.
@@ -87,25 +87,27 @@ public final class BattlePrompt extends GCompound {
         frame.setColor(Palette.DANGER);
         add(frame);
         headline = text(12, 26, Palette.HEADLINE.deriveFont(20f), Palette.TEXT);
-        cornerLine = text(12, 46, Palette.SMALL, Palette.TEXT_DIM);
-        for (int i = 0; i < choices.length; i++) {
-            choices[i] = new UiButton("", BUTTON_W, 32);
-            choices[i].setAccent(Palette.lineColor(ORDER[i]));
-            add(choices[i], 12 + i * (BUTTON_W + 6), 56);
+        for (int i = 0; i < lines.length; i++) {
+            lines[i] = new UiButton("", BUTTON_W, 34);
+            lines[i].setAccent(Palette.lineColor(ORDER[i]));
+            add(lines[i], 12 + i * (BUTTON_W + 7), 38);
         }
-        late = new UiButton("L  Late braking: off", 220, 26);
-        add(late, 12, 94);
-        GLabel hint = text(244, 112, Palette.SMALL, Palette.TEXT_DIM);
-        hint.setLabel("Colored lines on the track = your choices. Red dashes = rival.");
-        for (int i = 0; i < FACTORS; i++) {
-            factors[i] = text(12, FACTOR_TOP + i * FACTOR_STEP, Palette.SMALL, Palette.TEXT);
+        overtake = new UiButton("SHIFT   OVERTAKE", 250, 34);
+        overtake.setAccent(Palette.PLAYER);
+        add(overtake, 12, 38);
+        overtakeHint = text(274, 60, Palette.SMALL, Palette.TEXT_DIM);
+        for (int i = 0; i < LIGHTS; i++) {
+            lights[i] = new GRect(WIDTH - 12 - (LIGHTS - i) * 34, 8, 28, 22);
+            lights[i].setFilled(true);
+            add(lights[i]);
         }
-        countdown = new GRect(12, HEIGHT - 26, BAR_WIDTH, 5);
+        for (int i = 0; i < facts.length; i++) {
+            facts[i] = text(12 + i * 196, 96, Palette.HUD, Palette.TEXT);
+        }
+        countdown = new GRect(12, HEIGHT - 32, BAR_WIDTH, 4);
         countdown.setFilled(true);
-        countdown.setFillColor(Palette.DANGER);
-        countdown.setColor(Palette.DANGER);
         add(countdown);
-        footer = text(12, HEIGHT - 7, Palette.HUD, Palette.PLAYER);
+        footer = text(12, HEIGHT - 10, Palette.HUD, Palette.PLAYER);
     }
 
     /**
@@ -126,7 +128,7 @@ public final class BattlePrompt extends GCompound {
     }
 
     /**
-     * Shows an open battle: the choices, the factors and the time left.
+     * Shows an open fight.
      *
      * @param battle the player's battle
      * @param race the race
@@ -137,157 +139,201 @@ public final class BattlePrompt extends GCompound {
         Car rival = battle.getRival();
         boolean attacking = battle.isPlayerAttacking();
         String code = rival.getDriver().getCode();
-        Color roleColor = attacking ? Palette.DANGER : Palette.LINE_INSIDE;
-        if (!frame.getColor().equals(roleColor)) {
-            frame.setColor(roleColor);
-            countdown.setFillColor(roleColor);
-            countdown.setColor(roleColor);
-        }
-        setText(headline, String.format(Locale.ROOT, "%s  %s  TURN %d", attacking ? "ATTACK" : "DEFEND",
-                attacking ? "on " + code : "against " + code, battle.getCorner().getNumber()));
-        setText(cornerLine, cornerText(battle, race));
-        String[] names = attacking
-                ? new String[] {"Inside", "Optimal", "Outside", "Stay behind"}
-                : new String[] {"Cover inside", "Optimal", "Cover outside", ""};
+        double gap = race.trackGap(battle.getAttacker(), battle.getDefender()) / Math.max(1, battle.getAttacker().getSpeed());
+        boolean ahead = race.trackGap(battle.getAttacker(), battle.getDefender()) > race.getTrack().getLapLength() / 2;
+        setFrame(attacking ? Palette.DANGER : Palette.LINE_INSIDE);
+        showLights(-1);
         LineChoice chosen = battle.getPlayerLine();
-        for (int i = 0; i < choices.length; i++) {
-            boolean usable = attacking || ORDER[i] != LineChoice.STAY_BEHIND;
-            choices[i].setVisible(usable);
-            choices[i].setLabel(usable ? KEYS[i] + "  " + names[i] : "");
-            choices[i].setHighlighted(usable && chosen == ORDER[i]);
-        }
-        late.setLabel("L  Late braking: " + (battle.isPlayerLate() ? "ON" : "off"));
-        late.setHighlighted(battle.isPlayerLate());
-        showFactors(battle, race, player, rival, attacking);
-        double fraction = Math.max(0, Math.min(1, secondsLeft / Tuning.BATTLE_DECISION_SECONDS));
-        countdown.setSize(Math.max(1, BAR_WIDTH * (battle.isPlayerDecided() ? 0 : fraction)), 5);
-        if (battle.isPlayerLocked() && chosen != null) {
-            setText(footer, "Committed: " + describe(chosen, attacking) + (battle.isPlayerLate() ? ", late braking" : ""));
-        } else if (battle.isPlayerDecided() && chosen != null) {
-            setText(footer, "Line: " + describe(chosen, attacking) + (battle.isPlayerLate() ? ", late braking" : "")
-                    + "   (you can still change it)");
-        } else {
-            LineChoice fallback = LineChoicePolicy.playerDefault(player, battle.getGapSeconds(), attacking);
-            setText(footer, String.format(Locale.ROOT, "Choose in %.1f s, or it will be: %s",
-                    Math.max(0, secondsLeft), describe(fallback, attacking)));
-        }
-    }
-
-    /**
-     * Fills in the factor rows, colored by who they favor.
-     *
-     * @param battle the battle
-     * @param race the race
-     * @param player the player's car
-     * @param rival the other car
-     * @param attacking true if the player is behind
-     */
-    private void showFactors(Battle battle, Race race, Car player, Car rival, boolean attacking) {
-        String code = rival.getDriver().getCode();
-        Car attacker = battle.getAttacker();
-        Car defender = battle.getDefender();
-        double gapMeters = race.trackGap(attacker, defender);
-        double gapSeconds = gapMeters / Math.max(1, attacker.getSpeed());
-        boolean alongside = gapMeters < Tuning.MIN_SEPARATION;
-        boolean attackerAhead = gapMeters > race.getTrack().getLapLength() / 2;
-        String gapText = attackerAhead ? (attacking ? "Gap: you are ahead now" : "Gap: " + code + " is ahead now")
-                : alongside
-                ? String.format(Locale.ROOT, "Gap: alongside (%.0f%% level)", 100 * (1 - gapMeters / Tuning.MIN_SEPARATION))
-                : String.format(Locale.ROOT, "Gap: %.2f s (%.0f m). The attacker must be alongside by turn-in.", gapSeconds, gapMeters);
-        boolean closeForAttack = attackerAhead || gapSeconds < Tuning.DEFAULT_ATTACK_GAP;
-        row(0, gapText, attacking == closeForAttack ? Palette.GOOD : Palette.DANGER);
-
-        double mySpeed = player.getTopSpeed() * 3.6;
-        double theirSpeed = rival.getTopSpeed() * 3.6;
-        double diff = mySpeed - theirSpeed;
-        String why = reasons(player);
-        String theirWhy = reasons(rival);
-        row(1, String.format(Locale.ROOT, "Straight speed: you %+.0f km/h%s%s", diff,
-                why.isEmpty() ? "" : "  (you: " + why + ")", theirWhy.isEmpty() ? "" : "  (" + code + ": " + theirWhy + ")"),
-                tone(diff, EVEN_SPEED));
-
-        double gripDiff = player.getCurrentGrip() - rival.getCurrentGrip();
-        row(2, String.format(Locale.ROOT, "Grip: you %.0f%% vs %.0f%%   Tires: %s %.0f%% worn vs %s %.0f%% worn",
-                player.getCurrentGrip() * 100, rival.getCurrentGrip() * 100,
-                player.getTire().getCompound().getLetter(), player.getTire().getWear() * 100,
-                rival.getTire().getCompound().getLetter(), rival.getTire().getWear() * 100),
-                tone(gripDiff, EVEN_GRIP));
-
-        double ersDiff = player.getErs().getCharge() - rival.getErs().getCharge();
-        row(3, String.format(Locale.ROOT, "Battery: you %.0f%% vs %.0f%%   (X to deploy)", player.getErs().getCharge() * 100,
-                rival.getErs().getCharge() * 100), tone(ersDiff, 0.1));
-
-        double wetness = race.getConditions().wetnessAt(battle.getCorner().getBrakingPoint());
-        String risk = BattleResolver.riskWord(player, wetness);
-        row(4, "Lock-up risk if you brake late: " + risk + "   (worn tires, hot brakes, rain and Push raise it)",
-                "low".equals(risk) ? Palette.GOOD : "high".equals(risk) ? Palette.DANGER : Palette.WARNING);
-
-        LineChoice rivalLine = battle.getRivalLine();
-        String rivalText;
-        if (rivalLine == null) {
-            rivalText = code + " has not committed to a line yet";
+        boolean choosingLine = !attacking || battle.isOvertake();
+        if (attacking && !battle.isOvertake()) {
+            setText(headline, String.format(Locale.ROOT, "ATTACK   %s  %.2f s ahead   Turn %d", code, ahead ? 0 : gap,
+                    battle.getCorner().getNumber()));
         } else if (attacking) {
-            rivalText = code + " will " + (rivalLine == LineChoice.INSIDE ? "cover the inside"
-                    : rivalLine == LineChoice.OUTSIDE ? "cover the outside" : "hold the optimal line")
-                    + (battle.isRivalLate() ? " and brake late" : "") + " (red dashes)";
+            setText(headline, "OVERTAKE ON   vs " + code + "   choose your line");
         } else {
-            rivalText = code + (rivalLine == LineChoice.STAY_BEHIND ? " is staying behind"
-                    : " is lining up the " + rivalLine.getDisplayName().toLowerCase(Locale.ROOT) + " line")
-                    + (battle.isRivalLate() ? ", braking late" : "") + " (red dashes)";
+            LineChoice their = battle.getAttackerLine();
+            String how = their == null || their == LineChoice.STAY_BEHIND ? "" : "  (going " + their.getDisplayName().toLowerCase(Locale.ROOT) + ")";
+            setText(headline, "DEFEND   " + code + " is attacking" + how);
         }
-        row(5, rivalText, Palette.LINE_RIVAL);
+        String[] names = attacking ? new String[] {"Inside", "Optimal", "Outside"}
+                : new String[] {"Cover inside", "Optimal", "Cover outside"};
+        for (int i = 0; i < lines.length; i++) {
+            show(lines[i], choosingLine);
+            lines[i].setLabel(KEYS[i] + "   " + names[i]);
+            lines[i].setHighlighted(chosen == ORDER[i]);
+        }
+        show(overtake, attacking && !battle.isOvertake());
+        boolean canBoost = player.getErs().getCharge() >= Tuning.OVERTAKE_COST;
+        overtake.setEnabled(canBoost);
+        show(overtakeHint, attacking && !battle.isOvertake());
+        setText(overtakeHint, canBoost ? "boost + DRS + late braking   (or A / S / D without boost)"
+                : String.format(Locale.ROOT, "needs %.0f%% boost   (A / S / D: line without boost)", Tuning.OVERTAKE_COST * 100));
+        showFacts(player, rival);
+        double fraction = Math.max(0, Math.min(1, secondsLeft / Tuning.BATTLE_DECISION_SECONDS));
+        countdown.setSize(Math.max(1, BAR_WIDTH * (battle.isPlayerDecided() ? 0 : fraction)), 4);
+        if (battle.isPlayerDecided() && chosen != null) {
+            setText(footer, "Line: " + names[indexOf(chosen)] + (battle.isOvertake() ? "   with Overtake" : "")
+                    + (battle.isPlayerLocked() ? "   (committed)" : "   (change with A / S / D)"));
+        } else {
+            LineChoice fallback = LineChoicePolicy.playerDefault(attacking, battle.isOvertake());
+            String next = fallback == LineChoice.STAY_BEHIND ? "you follow" : names[indexOf(fallback)];
+            setText(footer, String.format(Locale.ROOT, "%.1f s to choose, otherwise: %s", Math.max(0, secondsLeft), next));
+        }
     }
 
     /**
-     * Lists why a car is fast on the straight right now.
+     * Shows the start: the lights, then the launch and the line into the first corner.
      *
-     * @param car the car
-     * @return words such as "DRS, battery", or empty
+     * @param race the race
+     * @param lightsOn how many red lights are on (0 to 5), or -1 once they have gone out
+     * @param launched true once the player's car has launched
+     * @param line the player's line into the first corner
      */
-    private static String reasons(Car car) {
-        StringBuilder text = new StringBuilder();
-        if (car.isDrsOpen()) {
-            text.append("DRS open");
-        } else if (car.getDrsZone() >= 0) {
-            text.append("DRS ready");
+    public void showStart(Race race, int lightsOn, boolean launched, LineChoice line) {
+        setFrame(Palette.PLAYER);
+        showLights(lightsOn);
+        Corner first = race.getStartCorner();
+        int turn = first == null ? 1 : first.getNumber();
+        Car player = race.getPlayerCar();
+        if (lightsOn >= 0) {
+            setText(headline, "START   lights...");
+        } else {
+            setText(headline, launched ? "START   into Turn " + turn : "START   GO!  Press SHIFT to launch");
         }
-        if (car.getErs().isDeploying()) {
-            text.append(text.length() > 0 ? ", " : "").append("battery");
+        String[] names = {"Inside", "Optimal", "Outside"};
+        for (int i = 0; i < lines.length; i++) {
+            show(lines[i], true);
+            lines[i].setLabel(KEYS[i] + "   " + names[i]);
+            lines[i].setHighlighted(line == ORDER[i]);
         }
-        if (car.getPushLevel() == PushLevel.PUSH) {
-            text.append(text.length() > 0 ? ", " : "").append("push");
+        show(overtake, false);
+        show(overtakeHint, false);
+        showFacts(player, null);
+        countdown.setSize(1, 4);
+        if (lightsOn >= 0) {
+            setText(footer, "Press SHIFT the moment the lights go out. Too early is a jump start.");
+        } else if (!launched) {
+            setText(footer, "SHIFT now!");
+        } else if (player.isOvertakeActive()) {
+            setText(footer, "Overtake on: boost and late braking into Turn " + turn + ".  A / S / D: line");
+        } else {
+            setText(footer, "A / S / D: line into Turn " + turn + ".   SHIFT: Overtake (boost + late braking)");
         }
-        return text.toString();
     }
 
     /**
-     * Describes the corner for the panel: how hard it is to pass at.
+     * Shows the three facts: straight-line speed, grip, and battery with DRS.
+     *
+     * @param player the player's car
+     * @param rival the other car, or null (start)
+     */
+    private void showFacts(Car player, Car rival) {
+        if (rival == null) {
+            fact(0, String.format(Locale.ROOT, "Boost %.0f%%", player.getErs().getCharge() * 100),
+                    player.getErs().getCharge() >= Tuning.OVERTAKE_COST ? Palette.GOOD : Palette.TEXT_DIM);
+            fact(1, "Grip " + Math.round(player.getCurrentGrip() * 100) + "%", Palette.TEXT);
+            fact(2, "Tires: " + player.getTire().getCompound().getDisplayName(), Palette.compoundColor(player.getTire().getCompound()));
+            return;
+        }
+        double speedDiff = (player.getTopSpeed() - rival.getTopSpeed()) * 3.6;
+        String speed = Math.abs(speedDiff) < 1 ? "Speed even" : String.format(Locale.ROOT, "Speed %+.0f km/h", speedDiff);
+        fact(0, speed, tone(speedDiff, EVEN_SPEED));
+        double gripDiff = player.getCurrentGrip() - rival.getCurrentGrip();
+        fact(1, String.format(Locale.ROOT, "Grip %d%% vs %d%%", Math.round(player.getCurrentGrip() * 100),
+                Math.round(rival.getCurrentGrip() * 100)), tone(gripDiff, EVEN_GRIP));
+        String drs = player.isDrsOpen() ? "   DRS open" : "";
+        boolean ready = player.getErs().getCharge() >= Tuning.OVERTAKE_COST;
+        fact(2, String.format(Locale.ROOT, "Boost %.0f%%%s", player.getErs().getCharge() * 100, drs),
+                player.isDrsOpen() ? Palette.DRS : ready ? Palette.GOOD : Palette.TEXT_DIM);
+    }
+
+    /**
+     * Sets one fact.
+     *
+     * @param index which fact
+     * @param text the text
+     * @param color the color
+     */
+    private void fact(int index, String text, Color color) {
+        setText(facts[index], text);
+        if (!facts[index].getColor().equals(color)) {
+            facts[index].setColor(color);
+        }
+    }
+
+    /**
+     * Lights the start lights: the first ones red, the rest dark; all hidden once they are out.
+     *
+     * @param lightsOn number of lights on, or -1 to hide them
+     */
+    private void showLights(int lightsOn) {
+        for (int i = 0; i < LIGHTS; i++) {
+            show(lights[i], lightsOn >= 0);
+            Color c = i < lightsOn ? Palette.DANGER : Palette.GAUGE_BACK;
+            if (!lights[i].getFillColor().equals(c)) {
+                lights[i].setFillColor(c);
+                lights[i].setColor(c);
+            }
+        }
+    }
+
+    /**
+     * Shows a finished fight's result.
      *
      * @param battle the battle
-     * @param race the race
-     * @return one line of text
      */
-    private static String cornerText(Battle battle, Race race) {
-        double difficulty = battle.getCorner().getDifficulty();
-        double track = race.getTrack().getProfile().getOvertakingDifficulty();
-        String kind = difficulty < Tuning.EASY_CORNER ? "heavy braking: a good place to pass"
-                : difficulty < Tuning.HARD_CORNER ? "medium braking: possible to pass" : "little braking: hard to pass";
-        return String.format(Locale.ROOT, "Turn %d, %s.  %s. Inside wins the corner if alongside; outside must be ahead.",
-                battle.getCorner().getNumber(), kind, track < 0.3 ? "Easy track to pass on" : "Hard track to pass on");
+    public void showResult(Battle battle) {
+        countdown.setSize(1, 4);
+        for (UiButton b : lines) {
+            show(b, false);
+        }
+        show(overtake, false);
+        show(overtakeHint, false);
+        setText(footer, battle.getMessage());
     }
 
     /**
-     * Names a choice the way the player sees it.
+     * Returns the line under a click, if any.
      *
-     * @param line the choice
-     * @param attacking true for the attacker's names
-     * @return the name
+     * @param x x inside the panel
+     * @param y y inside the panel
+     * @return the choice, or null
      */
-    private static String describe(LineChoice line, boolean attacking) {
-        if (attacking) {
-            return line.getDisplayName();
+    public LineChoice choiceAt(double x, double y) {
+        GObject hit = getElementAt(x, y);
+        for (int i = 0; i < lines.length; i++) {
+            if (hit != null && (hit == lines[i] || hit.getParent() == lines[i]) && lines[i].isVisible()) {
+                return ORDER[i];
+            }
         }
-        return line == LineChoice.INSIDE ? "Cover inside" : line == LineChoice.OUTSIDE ? "Cover outside" : "Optimal";
+        return null;
+    }
+
+    /**
+     * Returns whether a click hit the Overtake button.
+     *
+     * @param x x inside the panel
+     * @param y y inside the panel
+     * @return true on the button
+     */
+    public boolean isOvertakeAt(double x, double y) {
+        GObject hit = getElementAt(x, y);
+        return overtake.isVisible() && hit != null && (hit == overtake || hit.getParent() == overtake);
+    }
+
+    /**
+     * Returns the button position of a line.
+     *
+     * @param line the line
+     * @return 0, 1 or 2
+     */
+    private static int indexOf(LineChoice line) {
+        for (int i = 0; i < ORDER.length; i++) {
+            if (ORDER[i] == line) {
+                return i;
+            }
+        }
+        return 1;
     }
 
     /**
@@ -308,56 +354,28 @@ public final class BattlePrompt extends GCompound {
     }
 
     /**
-     * Sets one factor row.
+     * Sets the frame color.
      *
-     * @param index the row
-     * @param text the text
      * @param color the color
      */
-    private void row(int index, String text, Color color) {
-        setText(factors[index], text);
-        if (!factors[index].getColor().equals(color)) {
-            factors[index].setColor(color);
+    private void setFrame(Color color) {
+        if (!frame.getColor().equals(color)) {
+            frame.setColor(color);
+            countdown.setFillColor(color);
+            countdown.setColor(color);
         }
     }
 
     /**
-     * Shows a finished battle's result.
+     * Shows or hides an object only if that changes it.
      *
-     * @param battle the battle
+     * @param object the object
+     * @param visible true to show
      */
-    public void showResult(Battle battle) {
-        countdown.setSize(1, 5);
-        setText(footer, battle.getMessage());
-    }
-
-    /**
-     * Returns the choice under a click, if any.
-     *
-     * @param x x inside the panel
-     * @param y y inside the panel
-     * @return the choice, or null
-     */
-    public LineChoice choiceAt(double x, double y) {
-        GObject hit = getElementAt(x, y);
-        for (int i = 0; i < choices.length; i++) {
-            if (hit != null && (hit == choices[i] || hit.getParent() == choices[i]) && choices[i].isVisible()) {
-                return ORDER[i];
-            }
+    private static void show(GObject object, boolean visible) {
+        if (object.isVisible() != visible) {
+            object.setVisible(visible);
         }
-        return null;
-    }
-
-    /**
-     * Returns whether a click hit the late braking switch.
-     *
-     * @param x x inside the panel
-     * @param y y inside the panel
-     * @return true on the switch
-     */
-    public boolean isLateBrakeAt(double x, double y) {
-        GObject hit = getElementAt(x, y);
-        return hit != null && (hit == late || hit.getParent() == late);
     }
 
     /**

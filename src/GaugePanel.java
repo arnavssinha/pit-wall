@@ -64,10 +64,10 @@ public final class GaugePanel extends GCompound {
     /** ERS battery. */
     private final GaugeBar battery;
 
-    /** ERS deploy status line. */
+    /** Boost status line: what the Overtake key will do. */
     private final GLabel ersLine;
 
-    /** DRS status: open, earned for the next zone, or off. */
+    /** DRS badge: bright green while the flap is open. */
     private final GLabel drsLine;
 
     /** Track wetness where the car is. */
@@ -110,9 +110,9 @@ public final class GaugePanel extends GCompound {
         tireWear = gauge("Tire wear", 0, 1.2, false, 122);
         brakeTemp = gauge("Brakes", BRAKE_MIN, BRAKE_MAX, true, 146);
         brakeTemp.setBand(Tuning.BRAKE_GOOD_LOW, Tuning.BRAKE_FADE_TEMP);
-        battery = gauge("ERS", 0, 1, false, 170);
+        battery = gauge("Boost", 0, 1, false, 170);
         ersLine = label("", 12, 206, Palette.SMALL, Palette.TEXT_DIM);
-        drsLine = label("", WIDTH - 66, 206, Palette.SMALL, Palette.TEXT_DIM);
+        drsLine = label("", WIDTH - 62, 206, Palette.HUD, Palette.TEXT_DIM);
         wetGauge = gauge("Wetness", 0, 1, false, 216);
         weatherLine = label("", 12, 250, Palette.SMALL, Palette.TEXT_DIM);
     }
@@ -195,19 +195,26 @@ public final class GaugePanel extends GCompound {
         brakeTemp.setValue(brake, String.format(Locale.ROOT, "%.0f C", brake), brakeColor);
 
         Ers ers = car.getErs();
-        Color ersColor = ers.isDeploying() ? Palette.PLAYER : Palette.ERS;
+        boolean ready = ers.getCharge() >= Tuning.OVERTAKE_COST;
+        Color ersColor = car.isOvertakeActive() ? Palette.PLAYER : ready ? Palette.ERS : Palette.TEXT_DIM;
         battery.setValue(ers.getCharge(), String.format(Locale.ROOT, "%.0f%%", ers.getCharge() * 100), ersColor);
-        String deploy = ers.isDeploying() ? "DEPLOYING" : "harvesting";
-        String mode = car.isPlayer() ? "   X: " + (car.isErsWanted() ? "ON" : "OFF") : "";
-        setText(ersLine, deploy + mode);
-        if (car.isDrsOpen()) {
-            setText(drsLine, "DRS OPEN");
-            drsLine.setColor(Palette.GOOD);
-        } else if (car.getDrsZone() >= 0) {
-            setText(drsLine, "DRS ready");
-            drsLine.setColor(Palette.GOOD);
+        String status;
+        if (car.isOvertakeActive()) {
+            status = "OVERTAKE ON";
+        } else if (!car.isPlayer()) {
+            status = ers.isDeploying() ? "deploying" : "charging";
+        } else if (ready) {
+            status = "SHIFT: Overtake ready";
         } else {
-            setText(drsLine, race.isDrsAllowed() ? "DRS" : "DRS off");
+            status = String.format(Locale.ROOT, "Overtake needs %.0f%%", Tuning.OVERTAKE_COST * 100);
+        }
+        setText(ersLine, status);
+        ersLine.setColor(car.isOvertakeActive() ? Palette.PLAYER : ready ? Palette.TEXT : Palette.TEXT_DIM);
+        if (car.isDrsOpen()) {
+            setText(drsLine, "DRS");
+            drsLine.setColor(Palette.DRS);
+        } else {
+            setText(drsLine, race.isDrsAllowed() ? "DRS" : "");
             drsLine.setColor(Palette.TEXT_DIM);
         }
     }

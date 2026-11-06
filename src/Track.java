@@ -63,6 +63,10 @@ public final class Track {
         for (double[] p : real) {
             even.add(new double[] {p[0], p[1]});
         }
+        for (int round = 0; round < Tuning.SHAPE_ROUNDS; round++) {
+            limitCurvature(even, 1.0 / Tuning.MIN_CORNER_RADIUS);
+            separate(even, Tuning.TRACK_WIDTH + Tuning.TRACK_SEPARATION_GRASS + round * Tuning.SEPARATION_ROUND_EXTRA);
+        }
         limitCurvature(even, 1.0 / Tuning.MIN_CORNER_RADIUS);
         limitCurvature(real, 1.0 / Tuning.MIN_SPEED_RADIUS);
         even = resample(scaleToLength(even, profile.getLapLengthMeters()), count, spacing);
@@ -307,6 +311,97 @@ public final class Track {
             d += 2 * Math.PI;
         }
         return d;
+    }
+
+    /**
+     * Keeps parts of the lap that are far apart along the track from coming too close on the map, in
+     * place. The drawn track is wide, so two pieces whose centerlines are closer than the track width
+     * plus a strip of grass would merge into one patch of asphalt. Each too-close pair is pushed apart,
+     * mostly by moving the more sharply curving piece (so straights stay straight), and each push is
+     * spread smoothly along the lap so a whole corner moves as one piece instead of getting a dent.
+     * Each pass moves the track by at most Tuning.SEPARATION_STEP_METERS, so the shape only ever
+     * changes a little.
+     *
+     * @param points evenly spaced closed loop, changed in place
+     * @param minGap smallest allowed distance between far-apart pieces, in meters
+     */
+    private static void separate(List<double[]> points, double minGap) {
+        int n = points.size();
+        double step = 0;
+        for (int i = 0; i < n; i++) {
+            double[] a = points.get(i);
+            double[] b = points.get((i + 1) % n);
+            step += Math.hypot(b[0] - a[0], b[1] - a[1]);
+        }
+        step /= n;
+        int farApart = (int) Math.ceil(Tuning.SEPARATION_FAR_FACTOR * minGap / step);
+        int reach = (int) Math.ceil(Tuning.SEPARATION_SPREAD_METERS / step);
+        double[] kernel = new double[2 * reach + 1];
+        for (int k = -reach; k <= reach; k++) {
+            double z = k * step / (Tuning.SEPARATION_SPREAD_METERS / 3);
+            kernel[k + reach] = Math.exp(-0.5 * z * z);
+        }
+        for (int pass = 0; pass < Tuning.SEPARATION_PASSES; pass++) {
+            double[] turn = new double[n];
+            for (int i = 0; i < n; i++) {
+                double[] a = points.get(Math.floorMod(i - 2, n));
+                double[] b = points.get(i);
+                double[] c = points.get((i + 2) % n);
+                double h1 = Math.atan2(b[1] - a[1], b[0] - a[0]);
+                double h2 = Math.atan2(c[1] - b[1], c[0] - b[0]);
+                turn[i] = Math.abs(angleDifference(h2, h1)) + 1e-3;
+            }
+            double[] mx = new double[n];
+            double[] my = new double[n];
+            boolean any = false;
+            for (int i = 0; i < n; i++) {
+                double[] p = points.get(i);
+                for (int j = i + 1; j < n; j++) {
+                    int apart = Math.min(j - i, n - (j - i));
+                    if (apart <= farApart) {
+                        continue;
+                    }
+                    double[] q = points.get(j);
+                    double dx = p[0] - q[0];
+                    double dy = p[1] - q[1];
+                    if (Math.abs(dx) >= minGap || Math.abs(dy) >= minGap) {
+                        continue;
+                    }
+                    double d = Math.hypot(dx, dy);
+                    if (d >= minGap || d < 1e-9) {
+                        continue;
+                    }
+                    any = true;
+                    double push = (minGap - d) * 0.5;
+                    double shareI = turn[i] / (turn[i] + turn[j]);
+                    mx[i] += push * shareI * dx / d;
+                    my[i] += push * shareI * dy / d;
+                    mx[j] -= push * (1 - shareI) * dx / d;
+                    my[j] -= push * (1 - shareI) * dy / d;
+                }
+            }
+            if (!any) {
+                return;
+            }
+            double[] sx = new double[n];
+            double[] sy = new double[n];
+            double rawPeak = 0;
+            double spreadPeak = 0;
+            for (int i = 0; i < n; i++) {
+                rawPeak = Math.max(rawPeak, Math.hypot(mx[i], my[i]));
+                for (int k = -reach; k <= reach; k++) {
+                    int j = Math.floorMod(i + k, n);
+                    sx[i] += kernel[k + reach] * mx[j];
+                    sy[i] += kernel[k + reach] * my[j];
+                }
+                spreadPeak = Math.max(spreadPeak, Math.hypot(sx[i], sy[i]));
+            }
+            double scale = spreadPeak > 0 ? Math.min(rawPeak, Tuning.SEPARATION_STEP_METERS) / spreadPeak : 0;
+            for (int i = 0; i < n; i++) {
+                points.get(i)[0] += sx[i] * scale;
+                points.get(i)[1] += sy[i] * scale;
+            }
+        }
     }
 
     /**

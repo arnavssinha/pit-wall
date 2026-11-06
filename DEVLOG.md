@@ -344,3 +344,39 @@ complaint that abstract circles do not show who is alongside; Gran Turismo's tir
 - Tests: corner-claim rules replace the old pass-probability test; the full-race test now checks that no two
   cars are ever drawn on top of each other (except pit lane and retiring cars); 34 tests.
 - Removed 40 constants of the old pass system.
+
+## Feedback pass 4: one Overtake button, a real start, cleaner screen, fewer trains (2026-11-07)
+
+Owner feedback: the screen and the fight system had become cluttered and hard to use; DRS seemed gone;
+wanted one Overtake button (ERS + DRS + late braking + more), slow motion when in range, A/S/D lines after
+pressing it; passing was hard (track too thin); the start was too fast and should be an overtaking chance with
+color-coded directions; cars backed up badly; the leader was hard to chase; part of Interlagos merged.
+Owner choices: boost limited by battery; defending is just picking a line; lights + reaction launch + slow-mo to
+Turn 1; equal cars but Push a bit stronger and AI switching modes in the background (no AI-vs-AI indicators);
+SHIFT = Overtake; slightly wider track and slimmer cars; keep only the timing tower and gauges on screen; keep
+only the player marker, tire colors and puncture/lock-up effects on the cars.
+
+**Done**
+- Overtake (SHIFT): spends 15% of the battery, then until the next corner exit (at most 500 m) the car deploys
+  everything, runs 2.5% faster, may open DRS anywhere in a DRS zone when within a second, and brakes late into
+  the corner. Then A Inside / S Optimal / D Outside. Doing nothing means following. Computer attackers use the
+  same boost. The player's normal battery use keeps a reserve so the boost is there when needed.
+- Defending: a blue panel only when a car behind really attacks; A cover inside, S optimal, D cover outside.
+- Panel rebuilt: one place, one title, one big SHIFT OVERTAKE button or three colored line buttons, three facts
+  (speed, grip, boost/DRS). Fights open at least 2 s before braking.
+- Start: five lights (0.8 s apart, random hold), SHIFT reaction launch (jump start and slow getaway), slow
+  motion (0.75x) until the leader is through Turn 1, every car takes its own line into Turn 1 straight off the
+  grid (computer drivers pick at random, some brake late), colored lines and the Overtake boost for the player.
+  Timing tower shows gaps in meters for the first 20 s.
+- Screen: radio is a pop-up at the top; minimap off (M); bottom bar with position/speed/laps/pit plan and key
+  caps; gauges show BOOST and a DRS badge; player marked by a yellow chevron; rings, tire bars, warning triangle
+  and preview dots removed.
+- Room: track 62 m wide (was 56), cars 6.2 m wide (was 7.2), side-by-side clearance 7.4 m, lanes at 16 m.
+- Interlagos merge fixed for good: building a track now alternates corner rounding with a gentle separation step
+  that keeps far-apart pieces at least track width plus 12 m apart (capped 1 m per pass, spread smoothly, the
+  tighter curve moves). Closest pieces at Sao Paulo now 71 m apart.
+- Trains: a limping car (puncture or time loss) moves to the edge and the cars behind drive past (one punctured
+  car had held up twelve cars for a lap); cars not fighting follow at 0.35 s instead of nose to tail; a car that
+  lost a corner eases off gently; stronger tow; AI drivers stuck behind the same car grow bolder; AI drivers
+  switch between Push, Balanced and Conserve every couple of kilometers. Push is now +3% pace.
+- Engineer stays quiet during the start.

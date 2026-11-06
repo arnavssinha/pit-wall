@@ -43,7 +43,7 @@ public final class RadioEngineer {
         }
         lastCheck = time;
         Car car = race.getPlayerCar();
-        if (car.isFinished() || car.isRetired()) {
+        if (car.isFinished() || car.isRetired() || race.isStartPhase()) {
             return;
         }
         Tire tire = car.getTire();
@@ -58,11 +58,6 @@ public final class RadioEngineer {
         }
         if (car.getBrakes().getTemperature() > Tuning.BRAKE_FADE_TEMP) {
             send("brakes", "Brakes are overheating. Lift and coast.");
-        }
-        if (car.isErsWanted() && car.getErs().getCharge() <= 0.01) {
-            car.setErsWanted(false);
-            race.addMessage("Battery flat: deploy off to recharge. X to deploy again.", true);
-            lastAnyMessage = race.getTime();
         }
         checkRival(car);
         checkWeather(car);

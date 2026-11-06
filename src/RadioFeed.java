@@ -1,100 +1,77 @@
 import acm.graphics.GCompound;
 import acm.graphics.GLabel;
 import acm.graphics.GRect;
-import java.util.ArrayDeque;
-import java.util.Iterator;
 import java.util.List;
 
 /**
- * The team radio: the most recent messages, newest at the bottom. Messages about the player's
- * car are yellow; others are white. Lines live in an ArrayDeque: new ones join the end and the
- * oldest drops off the front when the panel is full.
+ * Team radio as a short pop-up: the newest message appears in one panel for a few seconds and then
+ * hides, so the screen stays clear. Messages about the player's car are yellow.
  */
 public final class RadioFeed extends GCompound {
 
-    /** Version tag required because ACM objects are serializable. */
+    /** Serialization id (GCompound is serializable). */
     private static final long serialVersionUID = 1L;
 
     /** Panel width in pixels. */
-    public static final double WIDTH = 258;
+    public static final double WIDTH = 560;
 
-    /** Number of lines shown. */
-    private static final int LINES = 5;
+    /** Panel height in pixels. */
+    public static final double HEIGHT = 30;
 
-    /** Height of one line in pixels. */
-    private static final double LINE_HEIGHT = 30;
+    /** Real seconds a message stays on screen. */
+    private static final double SHOW_SECONDS = 5.0;
 
-    /** Characters per line before wrapping. */
-    private static final int WRAP = 34;
+    /** Background. */
+    private final GRect panel;
 
-    /** The lines being shown, oldest first. */
-    private final transient ArrayDeque<RaceMessage> queue = new ArrayDeque<RaceMessage>();
+    /** The message text. */
+    private final GLabel text;
 
-    /** One label pair per line (two rows each, for wrapped text). */
-    private final GLabel[][] labels = new GLabel[LINES][2];
-
-    /** How many of the race's messages have been taken already. */
+    /** Number of race messages already shown. */
     private int taken;
 
+    /** Real seconds the current message has been shown. */
+    private double shownFor = SHOW_SECONDS;
+
     /**
-     * Builds the panel.
+     * Builds the (hidden) pop-up.
      */
     public RadioFeed() {
-        GRect panel = new GRect(0, 0, WIDTH, 28 + LINES * LINE_HEIGHT);
+        panel = new GRect(0, 0, WIDTH, HEIGHT);
         panel.setFilled(true);
         panel.setFillColor(Palette.PANEL);
         panel.setColor(Palette.PANEL_EDGE);
         add(panel);
-        GLabel title = new GLabel("TEAM RADIO", 12, 19);
-        title.setFont(Palette.HUD);
+        GLabel title = new GLabel("RADIO", 10, 20);
+        title.setFont(Palette.SMALL);
         title.setColor(Palette.TEXT_DIM);
         add(title);
-        for (int i = 0; i < LINES; i++) {
-            for (int row = 0; row < 2; row++) {
-                labels[i][row] = new GLabel("", 12, 40 + i * LINE_HEIGHT + row * 13);
-                labels[i][row].setFont(Palette.SMALL);
-                add(labels[i][row]);
-            }
-        }
+        text = new GLabel("", 62, 20);
+        text.setFont(Palette.HUD);
+        add(text);
+        setVisible(false);
     }
 
     /**
-     * Takes any new messages from the race and redraws the lines if something changed.
+     * Shows the newest message, if there is a new one, and hides the pop-up once it has been up long enough.
      *
-     * @param messages all of the race's messages so far
+     * @param messages all race messages so far
+     * @param realSeconds real time since the last frame
      */
-    public void update(List<RaceMessage> messages) {
-        if (taken == messages.size()) {
-            return;
+    public void update(List<RaceMessage> messages, double realSeconds) {
+        if (taken < messages.size()) {
+            RaceMessage newest = messages.get(messages.size() - 1);
+            taken = messages.size();
+            text.setLabel(newest.getText());
+            text.setColor(newest.isAboutPlayer() ? Palette.PLAYER : Palette.TEXT);
+            panel.setSize(Math.max(WIDTH, text.getWidth() + 76), HEIGHT);
+            shownFor = 0;
+        } else {
+            shownFor += realSeconds;
         }
-        while (taken < messages.size()) {
-            queue.addLast(messages.get(taken));
-            taken++;
-            if (queue.size() > LINES) {
-                queue.removeFirst();
-            }
+        boolean visible = shownFor < SHOW_SECONDS;
+        if (isVisible() != visible) {
+            setVisible(visible);
         }
-        Iterator<RaceMessage> it = queue.iterator();
-        for (int i = 0; i < LINES; i++) {
-            RaceMessage m = it.hasNext() ? it.next() : null;
-            String text = m == null ? "" : m.getText();
-            String first = text.length() <= WRAP ? text : text.substring(0, wrapPoint(text));
-            String second = text.substring(first.length()).trim();
-            for (int row = 0; row < 2; row++) {
-                labels[i][row].setLabel(row == 0 ? first : second);
-                labels[i][row].setColor(m != null && m.isAboutPlayer() ? Palette.PLAYER : Palette.TEXT);
-            }
-        }
-    }
-
-    /**
-     * Finds where to break a long line: the last space before the wrap width.
-     *
-     * @param text the message
-     * @return index to break at
-     */
-    private static int wrapPoint(String text) {
-        int space = text.lastIndexOf(' ', WRAP);
-        return space > 0 ? space : WRAP;
     }
 }

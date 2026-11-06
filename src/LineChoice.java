@@ -3,7 +3,7 @@
  * Inside is the shorter, tighter way in (it wins the corner if alongside but exits slowly);
  * Outside is the long way round (it needs to be ahead at the apex but keeps speed);
  * Optimal is the normal racing line (for an attacker: sit in the tow and get the better exit);
- * Stay behind means no attack this time.
+ * Follow (Stay behind) means no attack this time.
  */
 public enum LineChoice {
 
@@ -16,8 +16,8 @@ public enum LineChoice {
     /** The outside of the corner. */
     OUTSIDE("Outside"),
 
-    /** No attack: drop back a little and save the tires. */
-    STAY_BEHIND("Stay behind");
+    /** No attack: follow the car ahead. */
+    STAY_BEHIND("Follow");
 
     /** Name shown to the player. */
     private final String displayName;

@@ -116,6 +116,12 @@ public final class Car {
      */
     private double ersStyle = 0.5;
 
+    /** Absolute distance until which the Overtake boost is active (it is off when the car is past it). */
+    private double overtakeUntil = -Double.MAX_VALUE;
+
+    /** Seconds this car has spent close behind the car ahead without getting past. */
+    private double stuckSeconds;
+
     /** True once a tire is punctured (until the next pit stop). */
     private boolean punctured;
 
@@ -210,7 +216,7 @@ public final class Car {
     /**
      * Works out the speed this car wants at its current position.
      * The car's grip (tires times brake fade) picks the matching speed profile; push level,
-     * this race's pace factor, ERS and DRS then scale it. A fight line can make the car brake later
+     * this race's pace factor, ERS, DRS and the Overtake boost then scale it. A fight line can make the car brake later
      * or cost it speed (see LinePlan), and a puncture slows it a lot.
      *
      * @param profiles speed profiles for this track
@@ -220,7 +226,7 @@ public final class Car {
     public double targetSpeed(ProfileSet profiles, TrackConditions conditions) {
         currentGrip = tire.grip(conditions.wetnessAt(distance)) * brakes.fadeFactor();
         double scale = paceFactor * (1 + form) * pushLevel.getPace() * ers.boost()
-                * (drsOpen ? 1 + Tuning.DRS_SPEED_BOOST : 1);
+                * (drsOpen ? 1 + Tuning.DRS_SPEED_BOOST : 1) * (isOvertakeActive() ? 1 + Tuning.OVERTAKE_SPEED_BOOST : 1);
         currentTopSpeed = Tuning.TOP_SPEED * scale;
         if (retired) {
             return 0;
@@ -776,6 +782,61 @@ public final class Car {
      */
     public double getErsStyle() {
         return ersStyle;
+    }
+
+    /**
+     * Switches the Overtake boost on until the car reaches a distance (the exit of the coming corner).
+     * While it is on, the car deploys all the battery it can, runs a little faster, may open DRS in any
+     * DRS zone when close behind another car, and brakes late into its fight corner.
+     *
+     * @param untilDistance absolute distance at which the boost ends
+     */
+    public void activateOvertake(double untilDistance) {
+        overtakeUntil = untilDistance;
+    }
+
+    /**
+     * Returns whether the Overtake boost is on.
+     *
+     * @return true while active
+     */
+    public boolean isOvertakeActive() {
+        return distance < overtakeUntil;
+    }
+
+    /**
+     * Switches the Overtake boost off.
+     */
+    public void cancelOvertake() {
+        overtakeUntil = -Double.MAX_VALUE;
+    }
+
+    /**
+     * Adds to (or, with a negative amount, takes from) the time spent stuck behind the car ahead.
+     *
+     * @param seconds change in seconds
+     */
+    public void addStuckTime(double seconds) {
+        stuckSeconds = Math.max(0, stuckSeconds + seconds);
+    }
+
+    /**
+     * Returns the time spent stuck close behind the car ahead.
+     *
+     * @return seconds
+     */
+    public double getStuckSeconds() {
+        return stuckSeconds;
+    }
+
+    /**
+     * Returns whether the car is limping: a puncture, or still losing time after contact. A limping
+     * car moves to the edge of the track and the cars behind drive past instead of queueing.
+     *
+     * @return true while limping
+     */
+    public boolean isLimping() {
+        return punctured || timePenalty > 0;
     }
 
     /**

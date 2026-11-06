@@ -145,6 +145,7 @@ public final class PitWall extends GraphicsProgram {
             sim.scheduleSafetyCar(SELFTEST_SAFETY_CAR, stopper);
         }
         race.showDebug();
+        race.skipStartLights();
         int[] speeds = {Tuning.DEFAULT_TIME_SPEED_INDEX, Tuning.TIME_SPEEDS.length - 1};
         for (int speedIndex : speeds) {
             race.setSpeedIndex(speedIndex);

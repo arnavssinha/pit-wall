@@ -7,7 +7,8 @@ import java.util.Locale;
 
 /**
  * The text around the edges of the race screen: track name and clock at the top, the player's
- * assignment and speed at the bottom, a controls hint, and the chequered-flag banner at the end.
+ * position, speed, lap times and pit plan at the bottom with the controls as key caps, and the
+ * chequered-flag banner at the end.
  */
 public final class HudPanel extends GCompound {
 
@@ -25,9 +26,6 @@ public final class HudPanel extends GCompound {
 
     /** Track name, race clock, time speed and pause state. */
     private final GLabel topLine;
-
-    /** "You are driving..." assignment line. */
-    private final GLabel assignment;
 
     /** Speed and lap times of the car being followed. */
     private final GLabel carLine;
@@ -69,21 +67,25 @@ public final class HudPanel extends GCompound {
         add(topBox);
         topLine = text("", left + 12, 31, Palette.HUD, Palette.TEXT);
 
-        GRect bottomBox = new GRect(left, height - 92, 640, 84);
+        GRect bottomBox = new GRect(left, height - 92, width - left - 8, 84);
         bottomBox.setFilled(true);
         bottomBox.setFillColor(Palette.PANEL);
         bottomBox.setColor(Palette.PANEL_EDGE);
         add(bottomBox);
-        Car player = race.getPlayerCar();
-        Driver d = player.getDriver();
-        assignment = text(String.format(Locale.ROOT, "You are driving #%d %s for %s, starting P%d.",
-                d.getNumber(), d.getName(), d.getTeam().getName(), player.getGridPosition()),
-                left + 12, height - 70, Palette.HUD, Palette.PLAYER);
-        carLine = text("", left + 12, height - 51, Palette.MONO, Palette.TEXT);
-        pitLine = text("", left + 12, height - 33, Palette.MONO, Palette.TEXT);
-        text("QWE push  X ERS  A/S/O/D line  L late brake  C attack  B/N box  1-5 tires  Space  T speed  Z  F/G  Esc",
-                left + 12, height - 14, Palette.SMALL, Palette.TEXT_DIM);
-
+        carLine = text("", left + 12, height - 68, Palette.MONO, Palette.TEXT);
+        pitLine = text("", left + 12, height - 48, Palette.MONO, Palette.TEXT_DIM);
+        double x = left + 12;
+        double y = height - 34;
+        x = keycap(x, y, "SHIFT", "Overtake");
+        x = keycap(x, y, "A S D", "Line: inside / optimal / outside");
+        x = keycap(x, y, "Q W E", "Pace");
+        x = keycap(x, y, "B", "Box");
+        x = keycap(x, y, "1-5", "Tires");
+        x = keycap(x, y, "SPACE", "Pause");
+        x = keycap(x, y, "T", "Speed");
+        x = keycap(x, y, "Z", "View");
+        x = keycap(x, y, "M", "Map");
+        keycap(x, y, "ESC", "Menu");
         bannerBox = new GRect(0, 0, 520, 84);
         bannerBox.setFilled(true);
         bannerBox.setFillColor(Palette.PANEL);
@@ -94,6 +96,30 @@ public final class HudPanel extends GCompound {
         bannerDetail = new GLabel("");
         bannerDetail.setFont(Palette.HUD);
         bannerDetail.setColor(Palette.PLAYER);
+    }
+
+    /**
+     * Draws one key cap (the key in a box) and what it does, and returns where the next one goes.
+     *
+     * @param x left edge
+     * @param y top of the key cap
+     * @param key the key, such as "SHIFT"
+     * @param action what it does
+     * @return x for the next key cap
+     */
+    private double keycap(double x, double y, String key, String action) {
+        GLabel keyLabel = new GLabel(key);
+        keyLabel.setFont(Palette.SMALL.deriveFont(Font.BOLD));
+        double boxWidth = keyLabel.getWidth() + 10;
+        GRect box = new GRect(x, y, boxWidth, 18);
+        box.setFilled(true);
+        box.setFillColor(Palette.BUTTON);
+        box.setColor(Palette.TEXT_DIM);
+        add(box);
+        keyLabel.setColor(Palette.TEXT);
+        add(keyLabel, x + 5, y + 13);
+        GLabel actionLabel = text(action, x + boxWidth + 5, y + 13, Palette.SMALL, Palette.TEXT_DIM);
+        return actionLabel.getX() + actionLabel.getWidth() + 14;
     }
 
     /**

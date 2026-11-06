@@ -1,6 +1,8 @@
 import acm.program.GraphicsProgram;
 import java.awt.event.KeyEvent;
 import java.util.List;
+import java.util.Locale;
+import java.util.Random;
 
 /**
  * The race screen: puts the world, camera, timing tower, minimap, HUD and debug overlay together,
@@ -88,6 +90,24 @@ public final class RaceScreen implements Screen {
     /** Unspent simulation time carried to the next frame, in seconds. */
     private double accumulator;
 
+    /** True while the minimap is shown (M). */
+    private boolean miniMapShown;
+
+    /** Real seconds since the start sequence began. */
+    private double startClock;
+
+    /** Real seconds at which the start lights go out. */
+    private final double lightsOutAt;
+
+    /** True once the start lights have gone out. */
+    private boolean lightsOut;
+
+    /** True once the player's launch is settled (pressed, jumped, or the automatic launch). */
+    private boolean launched;
+
+    /** Real seconds since the lights went out. */
+    private double reactionClock;
+
 
     /**
      * Builds the screen and adds everything to the program's canvas.
@@ -123,8 +143,7 @@ public final class RaceScreen implements Screen {
         double mapW = 250;
         double mapH = 190;
         miniMap = new MiniMap(race, mapW, mapH);
-        miniMap.setLocation(width - mapW - 8, height - mapH - 8);
-        program.add(miniMap);
+        miniMap.setLocation(width - mapW - 8, viewBottom - mapH - 8);
 
         hud = new HudPanel(race, width, height);
         program.add(hud);
@@ -134,8 +153,13 @@ public final class RaceScreen implements Screen {
         program.add(gauges);
 
         radio = new RadioFeed();
-        radio.setLocation(width - RadioFeed.WIDTH - 8, HudPanel.TOP_BAR_BOTTOM + GaugePanel.HEIGHT + 18);
+        radio.setLocation(TimingTower.WIDTH + 24, HudPanel.TOP_BAR_BOTTOM + 4);
         program.add(radio);
+        Driver driver = race.getPlayerCar().getDriver();
+        race.addMessage(String.format(Locale.ROOT, "You are #%d %s (%s), starting P%d.", driver.getNumber(),
+                driver.getName(), driver.getTeam().getName(), race.getPlayerCar().getGridPosition()), true);
+        lightsOutAt = BattlePrompt.LIGHTS * Tuning.START_LIGHT_SECONDS
+                + Tuning.START_HOLD_MIN + new Random().nextDouble() * Tuning.START_HOLD_SPREAD;
 
         prompt = new BattlePrompt();
         prompt.setLocation(TimingTower.WIDTH + 24, viewBottom - BattlePrompt.HEIGHT - 6);
@@ -161,7 +185,8 @@ public final class RaceScreen implements Screen {
                 return;
             }
         }
-        int steps = stepsForFrame(realSeconds);
+        updateStart(realSeconds);
+        int steps = lightsOut ? stepsForFrame(realSeconds) : 0;
         for (int i = 0; i < steps; i++) {
             race.step();
         }
@@ -212,6 +237,9 @@ public final class RaceScreen implements Screen {
      */
     private double effectiveSpeed(double realSeconds) {
         double chosen = Tuning.TIME_SPEEDS[speedIndex];
+        if (race.isStartPhase()) {
+            return Math.min(chosen, Tuning.START_SLOWDOWN);
+        }
         Battle battle = race.getBattles().getPlayerBattle();
         if (battle != shownBattle) {
             shownBattle = battle;
@@ -223,9 +251,8 @@ public final class RaceScreen implements Screen {
         } else if (!battle.isResolved() && !battle.isPlayerDecided()) {
             promptClock += realSeconds;
             if (promptClock >= Tuning.BATTLE_DECISION_SECONDS) {
-                Car player = race.getPlayerCar();
                 race.getBattles().choosePlayerLine(
-                        LineChoicePolicy.playerDefault(player, battle.getGapSeconds(), battle.isPlayerAttacking()));
+                        LineChoicePolicy.playerDefault(battle.isPlayerAttacking(), battle.isOvertake()));
                 battle.markPlayerDecided();
             }
             easeClock = 0;
@@ -251,7 +278,8 @@ public final class RaceScreen implements Screen {
      */
     private void updatePrompt() {
         Battle battle = race.getBattles().getPlayerBattle();
-        if (battle == null) {
+        boolean start = !lightsOut || race.isStartPhase();
+        if (battle == null && !start) {
             if (promptShown) {
                 program.remove(prompt);
                 promptShown = false;
@@ -262,7 +290,10 @@ public final class RaceScreen implements Screen {
             program.add(prompt);
             promptShown = true;
         }
-        if (battle.isResolved()) {
+        if (start) {
+            int lightsOn = lightsOut ? -1 : Math.min(BattlePrompt.LIGHTS, (int) (startClock / Tuning.START_LIGHT_SECONDS));
+            prompt.showStart(race, lightsOn, launched, race.getBattles().getStartLine());
+        } else if (battle.isResolved()) {
             prompt.showResult(battle);
         } else {
             prompt.showOpen(battle, race, Tuning.BATTLE_DECISION_SECONDS - promptClock);
@@ -270,24 +301,57 @@ public final class RaceScreen implements Screen {
     }
 
     /**
-     * Finds the rival that is about to attack the player: the car right behind, within the intent
-     * gap, planning an Attack.
+     * Runs the start sequence: the lights come on one by one and go out after a short random wait;
+     * if the player has not launched with SHIFT shortly after, the car launches by itself.
      *
-     * @return the rival, or null
+     * @param realSeconds real time since the last frame
      */
-    private Car warnedRival() {
-        Car player = race.getPlayerCar();
-        for (Car car : race.getCars()) {
-            if (car != player && car.getIntent().leavesLine() && race.carAheadOnTrack(car) == player
-                    && race.trackGap(car, player) < car.getSpeed() * Tuning.INTENT_GAP_SECONDS) {
-                return car;
+    private void updateStart(double realSeconds) {
+        if (paused) {
+            return;
+        }
+        if (!lightsOut) {
+            startClock += realSeconds;
+            if (startClock >= lightsOutAt) {
+                lightsOut = true;
+            }
+            return;
+        }
+        if (!launched) {
+            reactionClock += realSeconds;
+            if (reactionClock >= Tuning.PLAYER_AUTO_LAUNCH) {
+                launched = true;
+                race.addMessage("Slow getaway: you missed the lights.", true);
             }
         }
-        return null;
     }
 
     /**
-     * Handles a mouse click: a line button or the late braking switch on the battle panel.
+     * Handles SHIFT: at the start it launches the car (too early is a jump start); otherwise it asks
+     * for the Overtake boost.
+     */
+    private void pressOvertake() {
+        if (!lightsOut) {
+            if (!launched) {
+                launched = true;
+                race.setPlayerLaunch(Tuning.JUMP_START_DELAY);
+                race.addMessage("Jump start! You had to wait before getting away.", true);
+            }
+            return;
+        }
+        if (!launched) {
+            launched = true;
+            double reaction = Math.max(Tuning.MIN_REACTION, reactionClock);
+            race.setPlayerLaunch(reaction);
+            race.addMessage(String.format(Locale.ROOT, "Reaction %.2f s%s", reaction,
+                    reaction < Tuning.GOOD_REACTION ? ": great start!" : "."), true);
+            return;
+        }
+        race.getBattles().requestPlayerOvertake();
+    }
+
+    /**
+     * Handles a mouse click: a line button or the Overtake button on the panel.
      *
      * @param x x on the canvas
      * @param y y on the canvas
@@ -300,8 +364,8 @@ public final class RaceScreen implements Screen {
             LineChoice line = prompt.choiceAt(px, py);
             if (line != null) {
                 race.getBattles().choosePlayerLine(line);
-            } else if (prompt.isLateBrakeAt(px, py)) {
-                race.getBattles().togglePlayerLateBrake();
+            } else if (prompt.isOvertakeAt(px, py)) {
+                pressOvertake();
             }
         }
     }
@@ -312,13 +376,15 @@ public final class RaceScreen implements Screen {
     private void render() {
         Battle battle = race.getBattles().getPlayerBattle();
         camera.update(followed, battle);
-        world.updateCars(warnedRival(), followed);
+        world.updateCars(followed);
         world.updatePreview();
         updatePrompt();
-        radio.update(race.getMessages());
+        radio.update(race.getMessages(), lastFrameSeconds);
         weather.update(race.getConditions(), lastFrameSeconds);
         tower.update();
-        miniMap.update();
+        if (miniMapShown) {
+            miniMap.update();
+        }
         hud.update(followed, Tuning.TIME_SPEEDS[speedIndex], paused);
         gauges.update(followed, race);
         hud.refreshBanner();
@@ -343,7 +409,11 @@ public final class RaceScreen implements Screen {
     public void handleKey(int keyCode, boolean shift) {
         switch (keyCode) {
             case KeyEvent.VK_SPACE:
+            case KeyEvent.VK_P:
                 paused = !paused;
+                break;
+            case KeyEvent.VK_SHIFT:
+                pressOvertake();
                 break;
             case KeyEvent.VK_T:
                 speedIndex = (speedIndex + 1) % Tuning.TIME_SPEEDS.length;
@@ -351,8 +421,11 @@ public final class RaceScreen implements Screen {
             case KeyEvent.VK_Z:
                 camera.toggleOverview();
                 break;
+            case KeyEvent.VK_M:
+                toggleMiniMap();
+                break;
             case KeyEvent.VK_F:
-                followNext(shift ? -1 : 1);
+                followNext(1);
                 break;
             case KeyEvent.VK_G:
                 followed = race.getPlayerCar();
@@ -378,9 +451,6 @@ public final class RaceScreen implements Screen {
             case KeyEvent.VK_E:
                 race.getPlayerCar().setPushLevel(PushLevel.PUSH);
                 break;
-            case KeyEvent.VK_X:
-                race.getPlayerCar().setErsWanted(!race.getPlayerCar().isErsWanted());
-                break;
             case KeyEvent.VK_B:
                 togglePitCall(1);
                 break;
@@ -400,17 +470,8 @@ public final class RaceScreen implements Screen {
             case KeyEvent.VK_S:
                 race.getBattles().choosePlayerLine(LineChoice.OPTIMAL);
                 break;
-            case KeyEvent.VK_O:
-                race.getBattles().choosePlayerLine(LineChoice.OUTSIDE);
-                break;
             case KeyEvent.VK_D:
-                race.getBattles().choosePlayerLine(LineChoice.STAY_BEHIND);
-                break;
-            case KeyEvent.VK_L:
-                race.getBattles().togglePlayerLateBrake();
-                break;
-            case KeyEvent.VK_C:
-                race.getBattles().requestPlayerAttack();
+                race.getBattles().choosePlayerLine(LineChoice.OUTSIDE);
                 break;
             case KeyEvent.VK_F3:
                 toggleDebug();
@@ -472,6 +533,26 @@ public final class RaceScreen implements Screen {
         List<Car> standings = race.getStandings();
         int index = standings.indexOf(followed);
         followed = standings.get(Math.floorMod(index + direction, standings.size()));
+    }
+
+    /**
+     * Shows or hides the minimap.
+     */
+    private void toggleMiniMap() {
+        if (miniMapShown) {
+            program.remove(miniMap);
+        } else {
+            program.add(miniMap);
+        }
+        miniMapShown = !miniMapShown;
+    }
+
+    /**
+     * Skips the start lights (for the self-test): the lights are out and the player has launched.
+     */
+    public void skipStartLights() {
+        lightsOut = true;
+        launched = true;
     }
 
     /**

@@ -54,6 +54,9 @@ public final class Battle {
     /** True if the two cars touched. */
     private boolean contact;
 
+    /** True once the attacker switched on the Overtake boost for this fight. */
+    private boolean overtake;
+
     /** The result once over, or null. */
     private BattleOutcome outcome;
 
@@ -276,6 +279,23 @@ public final class Battle {
      */
     public boolean hadContact() {
         return contact;
+    }
+
+    /**
+     * Records that the attacker is using the Overtake boost (which includes late braking).
+     */
+    public void markOvertake() {
+        overtake = true;
+        attackerLate = true;
+    }
+
+    /**
+     * Returns whether the attacker is using the Overtake boost.
+     *
+     * @return true with the boost on
+     */
+    public boolean isOvertake() {
+        return overtake;
     }
 
     /**

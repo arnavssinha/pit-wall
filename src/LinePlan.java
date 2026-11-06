@@ -41,6 +41,9 @@ public final class LinePlan {
     /** True once the car has locked up its brakes in this corner. */
     private boolean lockedUp;
 
+    /** True for a line into the first corner at the start (not a fight with one car). */
+    private boolean start;
+
     /**
      * Makes a plan.
      *
@@ -140,6 +143,22 @@ public final class LinePlan {
      */
     public void lockUp() {
         lockedUp = true;
+    }
+
+    /**
+     * Marks this as a start line into the first corner.
+     */
+    public void markStart() {
+        start = true;
+    }
+
+    /**
+     * Returns whether this is a start line into the first corner.
+     *
+     * @return true for the start
+     */
+    public boolean isStart() {
+        return start;
     }
 
     /**

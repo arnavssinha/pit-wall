@@ -17,6 +17,7 @@ public final class LineChoicePolicy {
 
     /**
      * Works out how much of an edge the car behind has, as a rough score: positive is an advantage.
+     * A driver stuck behind the same car for a while grows bolder.
      *
      * @param attacker the car behind
      * @param defender the car ahead
@@ -28,7 +29,8 @@ public final class LineChoicePolicy {
         double battery = (attacker.getErs().getCharge() - defender.getErs().getCharge()) * Tuning.AI_EDGE_ERS;
         double grip = (attacker.getCurrentGrip() - defender.getCurrentGrip()) * Tuning.AI_EDGE_GRIP;
         double close = (Tuning.BATTLE_GAP_SECONDS - gapSeconds) * Tuning.AI_EDGE_CLOSE;
-        return drs + battery + grip + close;
+        double stuck = Math.min(Tuning.AI_EDGE_STUCK_MAX, attacker.getStuckSeconds() * Tuning.AI_EDGE_PER_STUCK_SECOND);
+        return drs + battery + grip + close + stuck;
     }
 
     /**
@@ -87,23 +89,17 @@ public final class LineChoicePolicy {
     }
 
     /**
-     * The player's line when the decision timer runs out, from the player's push level: Push attacks
-     * down the inside (or covers the inside), Conserve stays behind (or holds the line), Balanced attacks
-     * only when close and otherwise sits on the optimal line.
+     * The player's line when the decision timer runs out: an attacker who pressed Overtake goes down
+     * the inside; one who did not just follows; a defender holds the optimal line.
      *
-     * @param player the player's car
-     * @param gapSeconds gap in seconds
      * @param attacking true if the player is behind
+     * @param overtake true if the player switched on the Overtake boost
      * @return the line
      */
-    public static LineChoice playerDefault(Car player, double gapSeconds, boolean attacking) {
+    public static LineChoice playerDefault(boolean attacking, boolean overtake) {
         if (!attacking) {
-            return player.getPushLevel() == PushLevel.PUSH ? LineChoice.INSIDE : LineChoice.OPTIMAL;
+            return LineChoice.OPTIMAL;
         }
-        if (player.getPushLevel() == PushLevel.CONSERVE) {
-            return LineChoice.STAY_BEHIND;
-        }
-        boolean close = gapSeconds < Tuning.DEFAULT_ATTACK_GAP && player.getTire().getWear() < Tuning.WEAR_CLIFF;
-        return player.getPushLevel() == PushLevel.PUSH || close ? LineChoice.INSIDE : LineChoice.OPTIMAL;
+        return overtake ? LineChoice.INSIDE : LineChoice.STAY_BEHIND;
     }
 }

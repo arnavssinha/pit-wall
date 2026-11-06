@@ -1,15 +1,16 @@
 import acm.graphics.GLabel;
 import acm.graphics.GLine;
 import acm.graphics.GObject;
-import acm.graphics.GOval;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Draws the lines of the player's fight on the track: each choice the player can make (Inside in
- * blue, Optimal in green, Outside in orange, matching the panel buttons) from the car to the corner
- * exit, the rival's line in red (dashed), and the player's braking point. The paths come from the same
+ * blue, Optimal in green, Outside in orange, matching the panel buttons, each labeled with its key)
+ * from the car to the corner exit, the rival's line in red (dashed), and the player's braking point.
+ * At the start it shows the three lines into the first corner. While an attack waits for the
+ * Overtake key nothing is drawn, so the screen stays clear. The paths come from the same
  * LinePlan the car will drive, so the preview shows exactly what will happen. The chosen line is drawn
  * thick; once the player has chosen, only the chosen line and the rival's are shown.
  */
@@ -33,20 +34,17 @@ public final class LinePreview {
     /** Slot of the rival's line. */
     private static final int RIVAL = 3;
 
-    /** Radius of the dot at the end of each option, in pixels. */
+    /** Offset of the key letter from the apex point, in pixels. */
     private static final double DOT = 5;
 
     /** The player options in slot order. */
     private static final LineChoice[] OPTIONS = {LineChoice.INSIDE, LineChoice.OPTIMAL, LineChoice.OUTSIDE};
 
     /** Key letters shown on the option dots, in slot order. */
-    private static final String[] KEYS = {"A", "S", "O"};
+    private static final String[] KEYS = {"A", "S", "D"};
 
     /** The lines, by slot, layer and segment. */
     private final GLine[][][] lines = new GLine[SLOTS][LAYERS][SEGMENTS];
-
-    /** Dots at the apex of each path. */
-    private final GOval[] dots = new GOval[SLOTS];
 
     /** Key letters next to the dots. */
     private final GLabel[] keys = new GLabel[SLOTS];
@@ -77,12 +75,6 @@ public final class LinePreview {
                     objects.add(line);
                 }
             }
-            GOval dot = new GOval(2 * DOT, 2 * DOT);
-            dot.setFilled(true);
-            dot.setFillColor(color);
-            dot.setColor(Palette.CAR_OUTLINE);
-            dots[slot] = dot;
-            objects.add(dot);
             GLabel key = new GLabel(slot == RIVAL ? "!" : KEYS[slot]);
             key.setFont(Palette.HUD);
             key.setColor(color);
@@ -119,7 +111,15 @@ public final class LinePreview {
      */
     public void update(Race race, TrackDrawing drawing, double zoom) {
         Battle battle = race.getBattles().getPlayerBattle();
+        if ((battle == null || battle.isResolved()) && race.isStartPhase()) {
+            showStart(race, drawing, zoom);
+            return;
+        }
         if (battle == null || battle.isResolved()) {
+            hideAll();
+            return;
+        }
+        if (battle.isPlayerAttacking() && !battle.isOvertake() && !battle.isPlayerDecided()) {
             hideAll();
             return;
         }
@@ -157,6 +157,63 @@ public final class LinePreview {
                     : planFor(race, player, LineChoice.OPTIMAL, battle.isPlayerLate(), battle.getCorner(), attacking);
             drawBrake(race, player, reference, drawing, zoom);
         }
+    }
+
+    /**
+     * Shows the player's three lines into the first corner during the start, the chosen one thick.
+     *
+     * @param race the race
+     * @param drawing the drawing converter
+     * @param zoom pixels per drawing unit
+     */
+    private void showStart(Race race, TrackDrawing drawing, double zoom) {
+        Corner first = race.getStartCorner();
+        Car player = race.getPlayerCar();
+        LinePlan current = player.getLinePlan();
+        if (first == null) {
+            hideAll();
+            return;
+        }
+        boolean past = player.getLapsCompleted() > 0 || player.getDistance() >= first.getApex() - Tuning.MIN_SEPARATION;
+        if (past || (current != null && player.getDistance() >= current.getApexAt())) {
+            hideAll();
+            return;
+        }
+        shown = true;
+        LineChoice chosen = race.getBattles().getStartLine();
+        boolean late = player.isOvertakeActive();
+        LinePlan chosenPlan = null;
+        for (int slot = 0; slot < OPTIONS.length; slot++) {
+            LinePlan plan = planForStart(race, player, OPTIONS[slot], late, first);
+            if (OPTIONS[slot] == chosen) {
+                chosenPlan = plan;
+            }
+            drawSlot(slot, race, player, plan, drawing, zoom, OPTIONS[slot] == chosen ? LAYERS : OPTION_LAYERS, false);
+        }
+        hideSlot(RIVAL);
+        if (chosenPlan != null) {
+            drawBrake(race, player, chosenPlan, drawing, zoom);
+        } else {
+            hideBrake();
+        }
+    }
+
+    /**
+     * Returns the plan the player has (if it matches) or would have for a line into the first corner.
+     *
+     * @param race the race
+     * @param car the player's car
+     * @param line the line
+     * @param late true for late braking
+     * @param corner the first corner
+     * @return the plan
+     */
+    private static LinePlan planForStart(Race race, Car car, LineChoice line, boolean late, Corner corner) {
+        LinePlan actual = car.getLinePlan();
+        if (actual != null && actual.getChoice() == line && actual.isLateBrake() == late && actual.getCorner() == corner) {
+            return actual;
+        }
+        return new LinePlan(line, corner, late, true, car.getDistance(), true, race.getTrack());
     }
 
     /**
@@ -220,9 +277,7 @@ public final class LinePreview {
         double lateral = plan.lateralAt(apex, normalLine(race, car, apex));
         double ax = drawing.x(apex, lateral) * zoom;
         double ay = -drawing.y(apex, lateral) * zoom;
-        dots[slot].setLocation(ax - DOT, ay - DOT);
-        dots[slot].setVisible(true);
-        keys[slot].setLocation(ax + DOT + 2, ay + DOT);
+        keys[slot].setLocation(ax + DOT, ay + DOT);
         keys[slot].setVisible(true);
     }
 
@@ -280,7 +335,6 @@ public final class LinePreview {
                 }
             }
         }
-        dots[slot].setVisible(false);
         keys[slot].setVisible(false);
     }
 

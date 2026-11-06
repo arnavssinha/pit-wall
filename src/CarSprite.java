@@ -37,11 +37,7 @@ public final class CarSprite {
     /** Size of the lock-up smoke puff in pixels. */
     private static final double SMOKE_SIZE = 9;
 
-    /** Width of the tire-condition bar in pixels. */
-    private static final double WEAR_BAR_WIDTH = 24;
 
-    /** Height of the tire-condition bar in pixels. */
-    private static final double WEAR_BAR_HEIGHT = 3;
 
     /** Frames per blink of a punctured tire. */
     private static final int PUNCTURE_BLINK_FRAMES = 8;
@@ -52,8 +48,6 @@ public final class CarSprite {
     /** Every part, in drawing order. */
     private final List<GPolygon> parts = new ArrayList<GPolygon>();
 
-    /** Yellow ring around the player's car, or null for other cars. */
-    private final GOval ring;
 
     /** Blue exhaust flame shown behind the car while it deploys ERS. */
     private final GPolygon glow;
@@ -73,17 +67,11 @@ public final class CarSprite {
     /** Compound currently shown on the tires. */
     private Compound shownCompound;
 
-    /** Background of the tire-condition bar under the car. */
-    private final GRect wearBack;
 
-    /** Tire-condition bar: full and green on new tires, short and red when worn out. */
-    private final GRect wearBar;
 
     /** Puff of tire smoke shown when the car locks up. */
     private final GOval smoke;
 
-    /** Red ring marking the player's rival during a fight. */
-    private final GOval rivalRing;
 
     /** Frames drawn, used to make a punctured tire blink. */
     private int frames;
@@ -98,7 +86,7 @@ public final class CarSprite {
      * Builds the sprite.
      *
      * @param car the car to draw
-     * @param isPlayer true to add the yellow ring and helmet that mark the player's car
+     * @param isPlayer true to add the yellow marker and helmet that mark the player's car
      */
     public CarSprite(Car car, boolean isPlayer) {
         this.car = car;
@@ -142,13 +130,6 @@ public final class CarSprite {
         style(helmet, isPlayer ? Palette.PLAYER : Color.WHITE, CARBON);
         parts.add(helmet);
 
-        if (isPlayer) {
-            ring = new GOval(TrackDrawing.CAR_LENGTH * 1.5, TrackDrawing.CAR_LENGTH * 1.5);
-            ring.setColor(Palette.PLAYER);
-            ring.setFilled(false);
-        } else {
-            ring = null;
-        }
         glow = new GPolygon();
         glow.addVertex(-0.85 * l, -0.5 * w);
         glow.addVertex(-2.4 * l, 0);
@@ -156,57 +137,41 @@ public final class CarSprite {
         style(glow, Palette.ERS_GLOW, Palette.ERS);
         glow.setVisible(false);
         alert = new GPolygon();
-        double s = TrackDrawing.CAR_WIDTH;
-        alert.addVertex(0, -s);
-        alert.addVertex(s, s * 0.8);
-        alert.addVertex(-s, s * 0.8);
-        style(alert, Palette.DANGER, Color.WHITE);
-        alert.setVisible(false);
+        double s = TrackDrawing.CAR_WIDTH * 1.2;
+        alert.addVertex(-s, -s * 1.4);
+        alert.addVertex(s, -s * 1.4);
+        alert.addVertex(0, 0);
+        style(alert, Palette.PLAYER, Palette.CAR_OUTLINE);
+        alert.setVisible(isPlayer);
         appliedDegrees = 0;
         appliedEnlargement = 1;
-        wearBack = new GRect(WEAR_BAR_WIDTH + 2, WEAR_BAR_HEIGHT + 2);
-        wearBack.setFilled(true);
-        wearBack.setFillColor(Palette.CAR_OUTLINE);
-        wearBack.setColor(Palette.CAR_OUTLINE);
-        wearBack.setVisible(false);
-        wearBar = new GRect(WEAR_BAR_WIDTH, WEAR_BAR_HEIGHT);
-        wearBar.setFilled(true);
-        wearBar.setVisible(false);
         smoke = new GOval(SMOKE_SIZE, SMOKE_SIZE);
         smoke.setFilled(true);
         smoke.setFillColor(SMOKE);
         smoke.setColor(SMOKE);
         smoke.setVisible(false);
-        rivalRing = new GOval(TrackDrawing.CAR_LENGTH * 1.5, TrackDrawing.CAR_LENGTH * 1.5);
-        rivalRing.setColor(Palette.LINE_RIVAL);
-        rivalRing.setVisible(false);
     }
 
     /**
-     * Returns the indicator objects drawn on top of all cars (tire bar, lock-up smoke, rival ring).
+     * Returns the effect objects drawn on top of all cars (lock-up smoke).
      *
      * @return the objects
      */
     public List<GObject> getIndicators() {
         List<GObject> list = new ArrayList<GObject>();
         list.add(smoke);
-        list.add(rivalRing);
-        list.add(wearBack);
-        list.add(wearBar);
         return list;
     }
 
     /**
-     * Updates the indicators: compound color on the tires, a blinking red tire after a puncture,
-     * the tire-condition bar (when details are shown for this car), lock-up smoke and the rival ring.
+     * Updates the effects: compound color on the tires, a blinking red tire after a puncture, and
+     * lock-up smoke.
      *
      * @param px screen x of the car
      * @param py screen y of the car
      * @param zoom pixels per drawing unit
-     * @param showDetail true to show the tire-condition bar
-     * @param isRival true to ring the car as the player's rival
      */
-    private void updateIndicators(double px, double py, double zoom, boolean showDetail, boolean isRival) {
+    private void updateIndicators(double px, double py, double zoom) {
         frames++;
         Compound compound = car.getTire().getCompound();
         if (compound != shownCompound) {
@@ -222,24 +187,6 @@ public final class CarSprite {
             tires[3].setFillColor(rearLeft);
         }
         double size = TrackDrawing.CAR_LENGTH * zoom * appliedEnlargement;
-        if (showDetail) {
-            double condition = Math.max(0, 1 - car.getTire().getWear());
-            Color c = car.isPunctured() ? Palette.DANGER : car.getTire().getWear() < Tuning.WEAR_CLIFF * 0.75 ? Palette.GOOD
-                    : car.getTire().getWear() < Tuning.WEAR_CLIFF ? Palette.WARNING : Palette.DANGER;
-            double bx = px - WEAR_BAR_WIDTH / 2;
-            double by = py + size * 0.6 + 4;
-            wearBack.setBounds(bx - 1, by - 1, WEAR_BAR_WIDTH + 2, WEAR_BAR_HEIGHT + 2);
-            wearBar.setLocation(bx, by);
-            wearBar.setSize(Math.max(1, WEAR_BAR_WIDTH * condition), WEAR_BAR_HEIGHT);
-            if (!wearBar.getFillColor().equals(c)) {
-                wearBar.setFillColor(c);
-                wearBar.setColor(c);
-            }
-        }
-        if (wearBar.isVisible() != showDetail) {
-            wearBar.setVisible(showDetail);
-            wearBack.setVisible(showDetail);
-        }
         LinePlan plan = car.getLinePlan();
         boolean locking = plan != null && plan.isLockedUp() && car.getDistance() < plan.getApexAt()
                 && (frames / 3) % 2 == 0;
@@ -250,14 +197,6 @@ public final class CarSprite {
             double heading = Math.toRadians(appliedDegrees);
             smoke.setBounds(px + Math.cos(heading) * size * 0.4 - SMOKE_SIZE / 2,
                     py - Math.sin(heading) * size * 0.4 - SMOKE_SIZE / 2, SMOKE_SIZE, SMOKE_SIZE);
-        }
-        if (rivalRing.isVisible() != isRival) {
-            rivalRing.setVisible(isRival);
-        }
-        if (isRival) {
-            double r = size * 0.9;
-            rivalRing.setSize(2 * r, 2 * r);
-            rivalRing.setLocation(px - r, py - r);
         }
     }
 
@@ -279,16 +218,6 @@ public final class CarSprite {
         return alert;
     }
 
-    /**
-     * Shows or hides the attack warning above this car.
-     *
-     * @param visible true to show
-     */
-    public void setAlert(boolean visible) {
-        if (alert.isVisible() != visible) {
-            alert.setVisible(visible);
-        }
-    }
 
     /**
      * Builds a rectangle part around the car's center.
@@ -332,14 +261,6 @@ public final class CarSprite {
         return parts;
     }
 
-    /**
-     * Returns the highlight ring, which only the player's car has.
-     *
-     * @return the ring, or null
-     */
-    public GOval getRing() {
-        return ring;
-    }
 
     /**
      * Returns the car this sprite draws.
@@ -357,10 +278,8 @@ public final class CarSprite {
      *
      * @param drawing converts track positions to drawing units
      * @param zoom pixels per drawing unit
-     * @param showDetail true to show the tire-condition bar under the car
-     * @param isRival true to ring the car as the player's rival in a fight
      */
-    public void update(TrackDrawing drawing, double zoom, boolean showDetail, boolean isRival) {
+    public void update(TrackDrawing drawing, double zoom) {
         double d = car.getDistance();
         double lateral = car.getLateralOffset();
         double px = drawing.x(d, lateral) * zoom;
@@ -404,12 +323,6 @@ public final class CarSprite {
         if (rotate) {
             appliedDegrees += turn;
         }
-        if (ring != null) {
-            if (rescale) {
-                ring.scale(enlargement / appliedEnlargement);
-            }
-            ring.setLocation(px - ring.getWidth() / 2, py - ring.getHeight() / 2);
-        }
         if (rescale) {
             alert.scale(enlargement / appliedEnlargement);
             appliedEnlargement = enlargement;
@@ -417,6 +330,6 @@ public final class CarSprite {
         if (alert.isVisible()) {
             alert.setLocation(px, py - TrackDrawing.CAR_LENGTH * zoom * appliedEnlargement);
         }
-        updateIndicators(px, py, zoom, showDetail, isRival);
+        updateIndicators(px, py, zoom);
     }
 }

@@ -156,7 +156,8 @@ public final class Race {
             car.setTireLifeScale(RaceLength.tireLifeScale(config.getLaps()));
             double spread = Tuning.AI_AGGRESSION_MAX - Tuning.AI_AGGRESSION_MIN;
             car.setAggression(Tuning.AI_AGGRESSION_MIN + random.nextDouble() * spread);
-            car.setLaunchDelay(Tuning.LAUNCH_DELAY_MIN + random.nextDouble() * Tuning.LAUNCH_DELAY_SPREAD);
+            double launch = Tuning.LAUNCH_DELAY_MIN + random.nextDouble() * Tuning.LAUNCH_DELAY_SPREAD;
+            car.setLaunchDelay(isPlayer ? Tuning.PLAYER_AUTO_LAUNCH : launch);
             car.setErsStyle(random.nextDouble());
             cars.add(car);
             standings.add(car);
@@ -239,7 +240,7 @@ public final class Race {
             Car car = cars.get(i);
             double before = car.getDistance();
             car.advance(moves[i], dt);
-            car.steer(personalLine(car), moves[i], dt);
+            car.steer(car.isLimping() && !car.isInPitLane() ? limpingLine(car) : personalLine(car), moves[i], dt);
         }
         keepSideBySideRoom(lateralBefore);
         for (int i = 0; i < n; i++) {
@@ -248,6 +249,9 @@ public final class Race {
             pitLane.afterMove(car, before, before + moves[i], dt);
             updateDrs(car, before, moves[i]);
             car.updateSystems(dt, moves[i], track, profiles, conditions, wantsDeploy(car));
+            if (car.isOvertakeActive() && car.getErs().isDeploying()) {
+                car.getErs().spend(Tuning.OVERTAKE_EXTRA_DRAIN * dt);
+            }
             recordCrossings(car, before, moves[i], dt);
         }
         time += dt;
@@ -549,6 +553,8 @@ public final class Race {
         }
         Car front = carAheadOnTrack(car);
         double frontGap = front == null ? Double.MAX_VALUE : trackGap(car, front);
+        boolean stuck = front != null && frontGap / Math.max(1, car.getSpeed()) < Tuning.STUCK_GAP_SECONDS;
+        car.addStuckTime(stuck ? dt : -car.getStuckSeconds());
         boolean straight = onStraight(car);
         if (front != null && !car.isInPitLane() && !front.isInPitLane()) {
             double inWake = Math.max(0, 1 - Math.abs(car.getLateralOffset() - front.getLateralOffset()) / Tuning.LATERAL_CLEARANCE);
@@ -570,10 +576,10 @@ public final class Race {
         LinePlan plan = car.getLinePlan();
         boolean attackingFront = plan != null && plan.isAttacker() && plan.getChoice().leavesLine();
         boolean racingFront = front != null && !front.isInPitLane() && !car.isInPitLane() && !front.isRetired()
-                && front != winner && car.getYieldTo() == null && !front.isFinished();
+                && front != winner && car.getYieldTo() == null && !front.isFinished() && !front.isLimping();
         if (racingFront && !attackingFront) {
             double keep = plan != null && plan.getChoice() == LineChoice.STAY_BEHIND
-                    ? Tuning.STAY_BEHIND_GAP_SECONDS : Tuning.FOLLOW_TIME_GAP;
+                    ? Tuning.STAY_BEHIND_GAP_SECONDS : Tuning.TRAIN_FOLLOW_SECONDS;
             if (frontGap < Tuning.MIN_SEPARATION + car.getSpeed() * keep) {
                 double drop = frontGap < Tuning.MIN_SEPARATION ? Tuning.OVERLAP_DROP_SPEED : 0;
                 target = Math.min(target, front.getSpeed() - drop);
@@ -616,6 +622,48 @@ public final class Race {
     }
 
     /**
+     * Tries to switch on a car's Overtake boost: it needs Tuning.OVERTAKE_COST of battery, which is
+     * spent at once; the boost then lasts to the exit of the next corner (at least a short straight's
+     * worth, at most Tuning.OVERTAKE_MAX_METERS).
+     *
+     * @param car the car
+     * @return true if the boost is now on
+     */
+    public boolean tryOvertake(Car car) {
+        if (car.isOvertakeActive()) {
+            return true;
+        }
+        if (car.getErs().getCharge() < Tuning.OVERTAKE_COST || safetyCar.isActive() || car.isInPitLane()) {
+            return false;
+        }
+        car.getErs().spend(Tuning.OVERTAKE_COST);
+        double nextExit = Double.MAX_VALUE;
+        for (Corner corner : corners) {
+            double toApex = track.wrap(corner.getApex() - car.getDistance());
+            if (toApex > Tuning.OVERTAKE_MIN_METERS / 2) {
+                nextExit = Math.min(nextExit, car.getDistance() + toApex + Tuning.CORNER_EXIT_METERS);
+            }
+        }
+        double minimum = car.getDistance() + Tuning.OVERTAKE_MIN_METERS;
+        double until = nextExit == Double.MAX_VALUE ? minimum : Math.max(minimum, nextExit);
+        car.activateOvertake(Math.min(until, car.getDistance() + Tuning.OVERTAKE_MAX_METERS));
+        return true;
+    }
+
+    /**
+     * Returns where a limping car drives: near the track edge on the side away from the racing line,
+     * so the cars behind can go past on the line.
+     *
+     * @param car the limping car
+     * @return sideways position in meters from the centerline
+     */
+    private double limpingLine(Car car) {
+        double line = track.lineAt(car.getDistance());
+        double edge = Tuning.TRACK_WIDTH / 2 - Tuning.CAR_WIDTH;
+        return line >= 0 ? -edge : edge;
+    }
+
+    /**
      * Returns the line this car normally drives here: the racing line plus the driver's own small
      * offset, kept inside the track.
      *
@@ -630,7 +678,8 @@ public final class Race {
     /**
      * Opens and closes a car's DRS. Crossing a detection point less than Tuning.DRS_GAP_SECONDS behind
      * the car ahead earns DRS for that zone; the flap is open while the car is in the zone and shuts
-     * at its end. DRS is off on the first lap, under the safety car and on a wet track.
+     * at its end. A car using the Overtake boost may also open DRS anywhere in a zone while it is within
+     * that second. DRS is off on the first lap, under the safety car and on a wet track.
      *
      * @param car the car
      * @param before distance before this step
@@ -647,6 +696,14 @@ public final class Race {
             return;
         }
         int zone = car.getDrsZone();
+        if (car.isOvertakeActive() && zone < 0) {
+            int here = drsZones.zoneAt(car.getDistance());
+            Car ahead = carAheadOnTrack(car);
+            if (here >= 0 && ahead != null && trackGap(car, ahead) / Math.max(1, car.getSpeed()) < Tuning.DRS_GAP_SECONDS) {
+                car.setDrs(here, true);
+                return;
+            }
+        }
         int crossed = drsZones.detectionCrossed(before, meters);
         if (crossed >= 0) {
             Car ahead = carAheadOnTrack(car);
@@ -750,8 +807,8 @@ public final class Race {
     }
 
     /**
-     * Decides whether a car spends battery energy this step. The player's car follows the player's
-     * deploy switch; computer cars deploy while the battery is comfortably charged.
+     * Decides whether a car spends battery energy this step. Normal use is automatic and the same for
+     * every car (the player's included, so the cars stay equal); the Overtake boost deploys everything.
      *
      * @param car the car
      * @return true to deploy on straights
@@ -760,7 +817,7 @@ public final class Race {
         if (safetyCar.isActive()) {
             return false;
         }
-        return car.isPlayer() ? car.isErsWanted() : AiDriver.wantsDeploy(car, track.wrap(car.getDistance()));
+        return car.isOvertakeActive() || AiDriver.wantsDeploy(car, track.wrap(car.getDistance()));
     }
 
     /**
@@ -997,6 +1054,47 @@ public final class Race {
      */
     private Car leader() {
         return standings.get(0);
+    }
+
+    /**
+     * Returns the first corner after the start (the one the whole field fights for off the line).
+     *
+     * @return the corner, or null if the track has none
+     */
+    public Corner getStartCorner() {
+        Corner best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (Corner corner : corners) {
+            if (corner.getBrakingPoint() > Tuning.START_CORNER_MIN_DISTANCE && corner.getBrakingPoint() < bestDistance) {
+                bestDistance = corner.getBrakingPoint();
+                best = corner;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Returns whether the race is still in its start phase: the first lap, before the leader has
+     * left the first corner behind.
+     *
+     * @return true from the lights until the leader is through the first corner
+     */
+    public boolean isStartPhase() {
+        Corner first = getStartCorner();
+        if (first == null) {
+            return false;
+        }
+        return leader().getLapsCompleted() == 0
+                && leader().getDistance() < first.getApex() + Tuning.CORNER_EXIT_METERS;
+    }
+
+    /**
+     * Sets when the player's car pulls away (from the reaction to the start lights).
+     *
+     * @param seconds race time at which the player's car launches
+     */
+    public void setPlayerLaunch(double seconds) {
+        playerCar.setLaunchDelay(seconds);
     }
 
     /**

@@ -67,13 +67,34 @@ public final class Tuning {
     public static final double CORNER_CURVATURE = 1.0 / 220.0;
 
     /** Tightest corner radius the drawn track may have, in meters, so the wide drawn track never folds. Style choice. */
-    public static final double MIN_CORNER_RADIUS = 40.0;
+    public static final double MIN_CORNER_RADIUS = 44.0;
 
     /**
      * Tightest corner radius used for corner speeds, in meters. The real layout keeps its tight corners
      * for speed, but a traced picture can draw a hairpin tighter than the real one, so it is capped here.
      */
     public static final double MIN_SPEED_RADIUS = 30.0;
+
+    /** Strip of grass kept between two far-apart pieces of the drawn track, in meters. */
+    public static final double TRACK_SEPARATION_GRASS = 12.0;
+
+    /** Two points count as far apart along the lap (and must not touch) beyond this many minimum gaps. */
+    public static final double SEPARATION_FAR_FACTOR = 3.0;
+
+    /** Distance along the lap over which a separation push is spread, in meters. */
+    public static final double SEPARATION_SPREAD_METERS = 120.0;
+
+    /** Rounds of corner rounding and separation when a track is built (each can undo a little of the other). */
+    public static final int SHAPE_ROUNDS = 4;
+
+    /** Extra separation asked for in each later round, in meters, to make up for the final rounding. */
+    public static final double SEPARATION_ROUND_EXTRA = 3.0;
+
+    /** Largest movement of the track in one separation pass, in meters. */
+    public static final double SEPARATION_STEP_METERS = 1.0;
+
+    /** Most passes used to push far-apart pieces of the track apart. */
+    public static final int SEPARATION_PASSES = 160;
 
     /** Most passes used to round off corners tighter than MIN_CORNER_RADIUS. */
     public static final int CORNER_EASING_MAX_PASSES = 4000;
@@ -84,13 +105,13 @@ public final class Tuning {
      * size (a real track is 12 to 15 m wide and a car is 1.9 m wide), so the cars are easy to see
      * and the picture is drawn at one scale in every direction. Style choice.
      */
-    public static final double TRACK_WIDTH = 56.0;
+    public static final double TRACK_WIDTH = 62.0;
 
     /** Car length in game-world meters (stylized, see TRACK_WIDTH). Used for drawing. */
     public static final double CAR_LENGTH = 20.0;
 
     /** Car width in game-world meters (stylized, see TRACK_WIDTH). Used for drawing and side-by-side room. */
-    public static final double CAR_WIDTH = 7.2;
+    public static final double CAR_WIDTH = 6.2;
 
     /**
      * Smallest allowed nose-to-nose distance between two cars, in meters. Balance choice made for
@@ -146,10 +167,10 @@ public final class Tuning {
     public static final double QUALIFYING_NOISE_SECONDS = 0.15;
 
     /** A car within this time gap behind another on a straight gets a slipstream (brief: about 1 s). */
-    public static final double SLIPSTREAM_GAP_SECONDS = 1.0;
+    public static final double SLIPSTREAM_GAP_SECONDS = 1.2;
 
     /** Largest slipstream speed bonus, right behind the car ahead. Balance choice. */
-    public static final double SLIPSTREAM_MAX_BONUS = 0.05;
+    public static final double SLIPSTREAM_MAX_BONUS = 0.07;
 
     /** A battle opens when the car ahead is within this time gap (brief: about 1.0 s). */
     public static final double BATTLE_GAP_SECONDS = 1.0;
@@ -212,7 +233,7 @@ public final class Tuning {
     public static final double PENALTY_SPEED_FRACTION = 0.7;
 
     /** Sideways distance at which two cars no longer touch (car width plus a little), in meters. */
-    public static final double LATERAL_CLEARANCE = 8.6;
+    public static final double LATERAL_CLEARANCE = 7.4;
 
     /** Lowest aggression drawn for a computer driver (narrow band, brief Section 3.11). */
     public static final double AI_AGGRESSION_MIN = 0.4;
@@ -239,7 +260,7 @@ public final class Tuning {
     public static final double PIT_SPEED_LIMIT = 80.0 / 3.6;
 
     /** Sideways distance from the track centerline to the pit lane, in meters. Drawing choice. */
-    public static final double PIT_LANE_OFFSET = 42.0;
+    public static final double PIT_LANE_OFFSET = 46.0;
 
     /** Sideways speed when moving into or out of the pit lane, in m/s. */
     public static final double PIT_LATERAL_SPEED = 20.0;
@@ -353,7 +374,7 @@ public final class Tuning {
     public static final double SC_BUNCH_GAP = 60.0;
 
     /** How far off the track a retired car parks, in meters from the centerline. */
-    public static final double OFF_TRACK_OFFSET = 36.0;
+    public static final double OFF_TRACK_OFFSET = 40.0;
 
     /** Computer drivers on slicks fit Wets (not Intermediates) above this wetness. */
     public static final double AI_WET_WETNESS = 0.7;
@@ -459,7 +480,7 @@ public final class Tuning {
      * A car that has lost a side-by-side fight (passed, or an attacker backing out) runs at least this
      * much slower than its rival until it is clear behind, in m/s, so no pass stays side by side for long.
      */
-    public static final double PASS_YIELD_SPEED = 5.0;
+    public static final double PASS_YIELD_SPEED = 3.0;
 
     /**
      * Braking is stronger than cornering grip by this factor: a car brakes in a straight line with the
@@ -477,7 +498,7 @@ public final class Tuning {
     public static final double SPEED_LINE_HALF_WIDTH = 5.0;
 
     /** Sideways position of the Inside and Outside lanes, in meters from the centerline. */
-    public static final double LANE_OFFSET = 14.0;
+    public static final double LANE_OFFSET = 16.0;
 
     /** Distance over which a car moves across into its fight lane, in meters. */
     public static final double LANE_CHANGE_METERS = 160.0;
@@ -537,10 +558,10 @@ public final class Tuning {
     public static final double DIRTY_AIR_SECONDS = 1.0;
 
     /** Most corner speed lost right behind another car in its dirty air, as a fraction. Balance choice. */
-    public static final double DIRTY_AIR_LOSS = 0.04;
+    public static final double DIRTY_AIR_LOSS = 0.025;
 
     /** A car that chose Stay behind keeps this many seconds back from the car ahead. */
-    public static final double STAY_BEHIND_GAP_SECONDS = 0.6;
+    public static final double STAY_BEHIND_GAP_SECONDS = 0.3;
 
     /** How much a computer driver's battery style moves its deploy threshold and how often it deploys. */
     public static final double AI_ERS_STYLE_RANGE = 0.3;
@@ -633,7 +654,7 @@ public final class Tuning {
     public static final double ON_DEMAND_ATTACK_GAP = 1.5;
 
     /** A battle needs at least this many seconds before the braking point, so there is time to choose. */
-    public static final double BATTLE_MIN_LEAD_SECONDS = 1.0;
+    public static final double BATTLE_MIN_LEAD_SECONDS = 2.0;
 
     /** After a pass, the player is offered the next car at once if it is within reach this many seconds later. */
     public static final double CHAIN_ATTACK_SECONDS = 6.0;
@@ -648,7 +669,7 @@ public final class Tuning {
     public static final double HARD_CORNER = 0.65;
 
     /** A car giving way never slows below this fraction of its own pace (so a queue can never stall). */
-    public static final double YIELD_FLOOR_FRACTION = 0.6;
+    public static final double YIELD_FLOOR_FRACTION = 0.85;
 
     /** A car stops giving way after this many seconds even if still level. */
     public static final double YIELD_MAX_SECONDS = 6.0;
@@ -677,11 +698,92 @@ public final class Tuning {
     /** Cars within this distance of the followed car show their tire-condition bar, in meters. */
     public static final double DETAIL_RADIUS_METERS = 150.0;
 
+    /** Battery spent at once when the Overtake boost is switched on (out of 1). Balance choice. */
+    public static final double OVERTAKE_COST = 0.15;
+
+    /** Extra battery drained per second while the Overtake boost deploys. */
+    public static final double OVERTAKE_EXTRA_DRAIN = 0.0;
+
+    /** Extra top speed while the Overtake boost is on, as a fraction. Balance choice. */
+    public static final double OVERTAKE_SPEED_BOOST = 0.025;
+
+    /** The Overtake boost never lasts longer than this far, in meters. */
+    public static final double OVERTAKE_MAX_METERS = 500.0;
+
+    /** The Overtake boost lasts at least this far, in meters (to the exit of the corner after that). */
+    public static final double OVERTAKE_MIN_METERS = 300.0;
+
+    /** Share of computer attacks made with the Overtake boost (scaled by aggression), when it has battery. */
+    public static final double AI_OVERTAKE_USE = 0.6;
+
+    /** The first corner after the start must brake at least this far past the line, in meters. */
+    public static final double START_CORNER_MIN_DISTANCE = 100.0;
+
+    /** Share of computer drivers going for the inside of the first corner at the start. */
+    public static final double START_INSIDE_SHARE = 0.35;
+
+    /** Share of computer drivers going around the outside of the first corner at the start. */
+    public static final double START_OUTSIDE_SHARE = 0.25;
+
+    /** Chance (scaled by aggression) that a computer driver brakes late into the first corner. */
+    public static final double START_LATE_BRAKE_SHARE = 0.3;
+
+    /** When the player's car launches if the player does not react to the lights, in race seconds. */
+    public static final double PLAYER_AUTO_LAUNCH = 0.8;
+
+    /** Fastest possible reaction to the start lights, in seconds. */
+    public static final double MIN_REACTION = 0.12;
+
+    /** Launch delay after a jump start (Overtake pressed before the lights went out), in seconds. */
+    public static final double JUMP_START_DELAY = 1.5;
+
+    /** Computer drivers reconsider their pace mode every this many meters. */
+    public static final double AI_PUSH_STRETCH_METERS = 2000.0;
+
+    /** Share of stretches a computer driver spends pushing when not fighting. */
+    public static final double AI_RANDOM_PUSH_SHARE = 0.2;
+
+    /** Share of stretches a computer driver spends saving tires when not fighting. */
+    public static final double AI_RANDOM_CONSERVE_SHARE = 0.15;
+
+    /** Real seconds between the start lights coming on one by one. */
+    public static final double START_LIGHT_SECONDS = 0.8;
+
+    /** Shortest wait, in real seconds, with all lights on before they go out. */
+    public static final double START_HOLD_MIN = 0.4;
+
+    /** Random extra wait before the lights go out, in real seconds. */
+    public static final double START_HOLD_SPREAD = 1.2;
+
+    /** Time speed from the lights until the leader is through the first corner. */
+    public static final double START_SLOWDOWN = 0.75;
+
+    /** A reaction quicker than this, in seconds, counts as a great start. */
+    public static final double GOOD_REACTION = 0.3;
+
+    /** A car that is not fighting keeps about this many seconds behind the car ahead (in its dirty air). */
+    public static final double TRAIN_FOLLOW_SECONDS = 0.35;
+
+    /** AI attack edge gained per second spent stuck close behind the same car. */
+    public static final double AI_EDGE_PER_STUCK_SECOND = 0.02;
+
+    /** Largest AI attack edge from being stuck behind a car. */
+    public static final double AI_EDGE_STUCK_MAX = 0.4;
+
+    /** A car counts as stuck behind another while within this many seconds of it. */
+    public static final double STUCK_GAP_SECONDS = 0.8;
+
+    /** For this many race seconds after the start the timing tower shows gaps in meters. */
+    public static final double START_GAP_IN_METERS_SECONDS = 20.0;
+
+    /** The player's automatic battery use keeps this much charge on top of one Overtake. */
+    public static final double PLAYER_ERS_RESERVE = 0.25;
+
     /** Steepest sideways movement per meter driven (about 17 degrees), so cars steer instead of sliding. */
     public static final double MAX_LATERAL_RATE = 0.3;
 
     /** Sideways gap that counts as alongside for two cars in the pit lane, in meters (still wider than a car). */
-    public static final double PIT_LATERAL_CLEARANCE = 7.6;
+    public static final double PIT_LATERAL_CLEARANCE = 6.6;
 
     /** Steepest sideways movement per meter in the pit lane, whose entry and exit roads turn off sharply. */
     public static final double PIT_MAX_LATERAL_RATE = 0.7;
@@ -822,10 +924,10 @@ public final class Tuning {
     public static final double ERS_START_CHARGE = 0.9;
 
     /** Charge gained per second of 1 g braking. Balance choice: about a quarter battery per lap. */
-    public static final double ERS_HARVEST_PER_G_SECOND = 0.02;
+    public static final double ERS_HARVEST_PER_G_SECOND = 0.03;
 
     /** Charge spent per second of deploying: a full battery lasts 10 s. Balance choice. */
-    public static final double ERS_DEPLOY_PER_SECOND = 0.10;
+    public static final double ERS_DEPLOY_PER_SECOND = 0.07;
 
     /** Speed gain while deploying, as a fraction: big enough to see the car surge. Balance choice. */
     public static final double ERS_SPEED_BOOST = 0.08;

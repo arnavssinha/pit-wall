@@ -80,16 +80,12 @@ public final class WorldView extends GCompound {
     }
 
     /**
-     * Adds every part of a car sprite: its exhaust glow, ring (player only) and body parts.
+     * Adds every part of a car sprite: its exhaust glow and body parts.
      *
      * @param sprite the sprite
      */
     private void addSprite(CarSprite sprite) {
         add(sprite.getGlow());
-        GOval ring = sprite.getRing();
-        if (ring != null) {
-            add(ring);
-        }
         for (GPolygon part : sprite.getParts()) {
             add(part);
         }
@@ -124,24 +120,13 @@ public final class WorldView extends GCompound {
     }
 
     /**
-     * Moves every car sprite to its car's position. Cars near the followed car show a tire-condition
-     * bar; the player's rival in a fight gets a red ring; a car about to attack the player gets the
-     * warning triangle.
+     * Moves every car sprite to its car's position.
      *
-     * @param warned the car to mark with the attack warning, or null
-     * @param focus the car the camera follows
+     * @param focus the car the camera follows (not used for drawing; kept for the caller)
      */
-    public void updateCars(Car warned, Car focus) {
-        Battle battle = race.getBattles().getPlayerBattle();
-        Car rival = battle != null && !battle.isResolved() ? battle.getRival() : null;
-        double lap = race.getTrack().getLapLength();
+    public void updateCars(Car focus) {
         for (CarSprite sprite : sprites) {
-            Car car = sprite.getCar();
-            double ahead = race.getTrack().wrap(car.getDistance() - focus.getDistance());
-            double near = Math.min(ahead, lap - ahead);
-            boolean detail = car == focus || car.isPlayer() || near < Tuning.DETAIL_RADIUS_METERS;
-            sprite.setAlert(car == warned);
-            sprite.update(drawing, zoom, detail && !car.isRetired(), car == rival);
+            sprite.update(drawing, zoom);
         }
     }
 
