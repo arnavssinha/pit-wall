@@ -7,7 +7,7 @@ unset JAVA_TOOL_OPTIONS 2>/dev/null || true
 
 rm -rf build/test
 mkdir -p build/test
-javac --release 11 -Xlint:all -Werror -encoding UTF-8 \
+javac --release 11 -Xlint:all,-serial -Werror -encoding UTF-8 \
       -cp lib/acm.jar -d build/test src/*.java test/*.java
 # The project root is on the classpath so data/... resolves as a resource.
 java -Djava.awt.headless=true -cp "build/test:lib/acm.jar:." SimTests

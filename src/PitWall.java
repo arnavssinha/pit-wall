@@ -1,227 +1,191 @@
 import acm.program.GraphicsProgram;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 
 /**
- * Main class of Pit Wall, an F1 race strategy game drawn with the ACM graphics library.
- * It loads the data, opens the menu and runs the main loop: pass queued keys and clicks to the
- * current screen, let the screen run one frame, then pause until the next frame (60 per second).
- * Start with --selftest to race for ten seconds, print frame rates and exit.
+ * Main class: opens the window, runs the start lights and then the race at 60 frames per second.
+ * Keys are queued by Java's input thread and handled by the game loop, so only one thread changes the game.
  */
 public final class PitWall extends GraphicsProgram {
-
-    /** Version tag required because ACM programs are serializable. */
-    private static final long serialVersionUID = 1L;
 
     /** Window width read by the ACM library. */
     public static final int APPLICATION_WIDTH = 1280;
 
-    /** Window height read by the ACM library; includes about 21 pixels for the ACM menu bar. */
+    /** Window height read by the ACM library. */
     public static final int APPLICATION_HEIGHT = 742;
 
-    /** Target frame time in milliseconds (60 frames per second). */
-    private static final double FRAME_MS = 1000.0 / 60.0;
+    /** Milliseconds per frame. */
+    private static final double FRAME_MS = 1000.0 / 60;
 
-    /** Seconds the self-test spends at each time speed it measures. */
-    private static final double SELFTEST_SECONDS_PER_SPEED = 5.0;
+    /** Time speeds the T key cycles through. */
+    private static final int[] SPEEDS = {1, 2, 4};
 
-    /** Race time when the self-test's rain starts, in seconds. */
-    private static final double SELFTEST_RAIN_START = 5.0;
+    /** Speed of the slow motion from the start to Turn 1. */
+    private static final double SLOW_MOTION = 0.4;
 
-    /** How long the self-test's rain lasts, in seconds. */
-    private static final double SELFTEST_RAIN_SECONDS = 120.0;
+    /** When the player's car pulls away if SHIFT is not pressed, in seconds after lights out. */
+    private static final double AUTO_LAUNCH = 1.0;
 
-    /** Race time when a car stops in the self-test, bringing out the safety car. */
-    private static final double SELFTEST_SAFETY_CAR = 15.0;
+    /** When the player's car pulls away after a jump start. */
+    private static final double JUMP_START_LAUNCH = 1.5;
 
-    /** Marker in the input queue for a mouse click (no real key has this code). */
-    private static final int CLICK = -1;
-
-    /** True when started with --selftest. */
+    /** True when started with --selftest (race for a few seconds, print the frame rate, exit). */
     private static boolean selfTest;
 
-    /**
-     * Key presses and mouse clicks since the last frame. Filled by the input thread, emptied by the
-     * game loop. A key is {code, shift}; a click is {CLICK, x, y}.
-     */
-    private final transient ArrayDeque<int[]> pendingInput = new ArrayDeque<int[]>();
+    /** Key codes pressed since the last frame. */
+    private final ArrayDeque<Integer> keys = new ArrayDeque<Integer>();
 
-    /** Switches between screens. */
-    private transient ScreenManager screens;
+    /** The track (loaded once). */
+    private Track track;
 
-    /**
-     * Creates the program. The ACM library builds the window in start().
-     */
-    public PitWall() {
-        super();
+    /** The current race. */
+    private Race race;
+
+    /** The world drawing. */
+    private TrackView view;
+
+    /** The panels on top. */
+    private Hud hud;
+
+    /** Seconds since the start lights began (negative once racing). */
+    private double lightsClock;
+
+    /** When the lights go out, in seconds after they began. */
+    private double lightsOut;
+
+    /** True while paused. */
+    private boolean paused;
+
+    /** Index into SPEEDS. */
+    private int speedIndex;
+
+    /** Simulation time not yet stepped (time is stepped in fixed 1/60 s steps). */
+    private double unstepped;
+
+    /** Starts the program. */
+    public static void main(String[] args) {
+        selfTest = args.length > 0 && args[0].equals("--selftest");
+        new PitWall().start(args);
     }
 
-    /**
-     * Loads data, shows the menu (or starts the self-test race) and runs the game loop.
-     */
+    /** Loads the track, starts a race and runs the game loop. */
     @Override
     public void run() {
-        setBackground(Palette.SCREEN_BACK);
-        List<Driver> roster;
-        List<String> trackIds;
-        HashMap<String, WeatherStats> weather;
         try {
-            roster = RosterLoader.load();
-            trackIds = TrackLoader.listTrackIds();
-            weather = WeatherStatsLoader.load();
+            track = Track.load("data/interlagos.csv");
         } catch (IOException e) {
-            screens = new ScreenManager(this, getWidth(), getHeight(), null, null, null);
-            screens.showError("Could not load game data: " + e.getMessage());
+            add(new acm.graphics.GLabel("Could not load the track: " + e.getMessage(), 40, 40));
             return;
         }
-        screens = new ScreenManager(this, getWidth(), getHeight(), roster, trackIds, weather);
         addKeyListeners();
-        addMouseListeners();
         getGCanvas().setFocusable(true);
         getGCanvas().requestFocusInWindow();
-        try {
-            if (selfTest) {
-                runSelfTest(trackIds.get(0));
-            } else {
-                screens.showMenu();
-                loop();
-            }
-        } catch (RuntimeException e) {
-            e.printStackTrace();
-            if (selfTest) {
-                System.out.println("SELFTEST FAILED: " + e);
-                System.exit(1);
-            }
-            screens.showError("Something went wrong: " + e);
-        }
-    }
-
-    /**
-     * The main loop: one pass per frame, forever.
-     */
-    private void loop() {
-        long last = System.nanoTime();
+        newRace();
+        long start = System.nanoTime();
+        int frames = 0;
         while (true) {
-            long now = System.nanoTime();
-            double frameSeconds = (now - last) / 1e9;
-            last = now;
-            runFrame(frameSeconds);
-            double spentMs = (System.nanoTime() - now) / 1e6;
-            pause(Math.max(1.0, FRAME_MS - spentMs));
-        }
-    }
-
-    /**
-     * Runs one frame of the current screen after handing it the queued input.
-     *
-     * @param frameSeconds real time since the previous frame
-     */
-    private void runFrame(double frameSeconds) {
-        handlePendingInput();
-        Screen current = screens.getCurrent();
-        if (current != null) {
-            current.frame(frameSeconds);
-        }
-    }
-
-    /**
-     * Races for a few seconds at 2x and then at 8x with the debug overlay on, prints the frame rate
-     * for each, and exits. Rain and a safety car are scheduled early so the weather and incident
-     * code is exercised with drawing on.
-     *
-     * @param trackId the track to race on
-     */
-    private void runSelfTest(String trackId) {
-        RaceScreen race = screens.startQuickRace(trackId, 1L);
-        Race sim = race.getRace();
-        sim.setRain(new RainEvent(SELFTEST_RAIN_START, SELFTEST_RAIN_SECONDS, 1.0));
-        Car stopper = sim.getCars().get(sim.getCars().size() - 1);
-        if (stopper != sim.getPlayerCar()) {
-            sim.scheduleSafetyCar(SELFTEST_SAFETY_CAR, stopper);
-        }
-        race.showDebug();
-        race.skipStartLights();
-        int[] speeds = {Tuning.DEFAULT_TIME_SPEED_INDEX, Tuning.TIME_SPEEDS.length - 1};
-        for (int speedIndex : speeds) {
-            race.setSpeedIndex(speedIndex);
-            long start = System.nanoTime();
-            long last = start;
-            while ((System.nanoTime() - start) / 1e9 < SELFTEST_SECONDS_PER_SPEED) {
-                long now = System.nanoTime();
-                runFrame((now - last) / 1e9);
-                last = now;
-                pause(Math.max(1.0, FRAME_MS - (System.nanoTime() - now) / 1e6));
+            long frameStart = System.nanoTime();
+            frame();
+            frames++;
+            if (selfTest && frameStart - start > 8e9) {
+                System.out.printf(Locale.ROOT, "SELFTEST OK: %.1f FPS, race time %.1f s%n", frames / 8.0, race.getTime());
+                System.exit(0);
             }
-            System.out.printf(Locale.ROOT, "SELFTEST %dx: %.1f FPS, race time %.1f s, objects %d%n",
-                    Tuning.TIME_SPEEDS[speedIndex], race.getFps(), race.getRace().getTime(),
-                    DebugOverlay.countObjects(getGCanvas()));
+            pause(Math.max(1, FRAME_MS - (System.nanoTime() - frameStart) / 1e6));
         }
-        System.out.println("SELFTEST OK: no exceptions");
-        System.exit(0);
     }
 
-    /**
-     * Passes queued key presses and clicks to the current screen. Runs on the game loop thread.
-     */
-    private void handlePendingInput() {
+    /** Starts a new race with a new random seed. */
+    private void newRace() {
+        removeAll();
+        race = new Race(track, System.nanoTime());
+        race.player.launchAt = AUTO_LAUNCH;
+        view = new TrackView(race);
+        hud = new Hud(race, getWidth(), getHeight());
+        add(view);
+        add(hud);
+        lightsClock = 0;
+        lightsOut = 5 + 0.5 + Math.random() * 1.5;
+        paused = false;
+        speedIndex = selfTest ? 2 : 0;
+        unstepped = 0;
+    }
+
+    /** One frame: handle keys, run the lights or step the race, then redraw. */
+    private void frame() {
         while (true) {
-            int[] input;
-            synchronized (pendingInput) {
-                input = pendingInput.poll();
+            Integer key;
+            synchronized (keys) {
+                key = keys.poll();
             }
-            Screen current = screens.getCurrent();
-            if (input == null || current == null) {
-                return;
+            if (key == null) {
+                break;
             }
-            if (input[0] == CLICK) {
-                current.handleClick(input[1], input[2]);
-            } else {
-                current.handleKey(input[0], input[1] == 1);
+            handleKey(key);
+        }
+        int lightsOn = -1;
+        if (lightsClock >= 0) {
+            lightsClock += FRAME_MS / 1000;
+            lightsOn = (int) Math.min(5, lightsClock);
+            if (lightsClock >= lightsOut || selfTest) {
+                lightsClock = -1;
+                lightsOn = -1;
             }
+        } else if (!paused) {
+            boolean toTurnOne = race.player.laps == 0 && race.player.distance < race.track.toNextBrakePoint(0) + 150;
+            unstepped += FRAME_MS / 1000 * (toTurnOne ? SLOW_MOTION : SPEEDS[speedIndex]);
+            while (unstepped >= Race.STEP) {
+                race.step();
+                unstepped -= Race.STEP;
+            }
+        }
+        view.update(getWidth(), getHeight());
+        hud.update(lightsOn, paused, SPEEDS[speedIndex]);
+    }
+
+    /** Acts on one key press. */
+    private void handleKey(int key) {
+        Car p = race.player;
+        if (key == KeyEvent.VK_R) {
+            newRace();
+        } else if (key == KeyEvent.VK_SHIFT && lightsClock >= 0) {
+            p.launchAt = JUMP_START_LAUNCH;
+            race.say("Jump start! Slow getaway.");
+            lightsClock = lightsOut;
+        } else if (key == KeyEvent.VK_SHIFT && p.launchAt == AUTO_LAUNCH && race.getTime() < AUTO_LAUNCH) {
+            p.launchAt = race.getTime();
+        } else if (key == KeyEvent.VK_SHIFT) {
+            race.playerOvertake();
+        } else if (key == KeyEvent.VK_A) {
+            race.playerLine(Fight.Line.INSIDE);
+        } else if (key == KeyEvent.VK_S) {
+            race.playerLine(Fight.Line.OPTIMAL);
+        } else if (key == KeyEvent.VK_D) {
+            race.playerLine(Fight.Line.OUTSIDE);
+        } else if (key == KeyEvent.VK_Q) {
+            p.mode = Car.Mode.CONSERVE;
+        } else if (key == KeyEvent.VK_W) {
+            p.mode = Car.Mode.NORMAL;
+        } else if (key == KeyEvent.VK_E) {
+            p.mode = Car.Mode.PUSH;
+        } else if (key >= KeyEvent.VK_1 && key <= KeyEvent.VK_5) {
+            p.boxFor = Compound.values()[key - KeyEvent.VK_1];
+        } else if (key == KeyEvent.VK_B) {
+            p.boxFor = null;
+        } else if (key == KeyEvent.VK_P || key == KeyEvent.VK_SPACE) {
+            paused = !paused;
+        } else if (key == KeyEvent.VK_T) {
+            speedIndex = (speedIndex + 1) % SPEEDS.length;
         }
     }
 
-    /**
-     * Queues a key press. Called by Java's input thread, so it only records the key;
-     * the game loop acts on it, which keeps all game changes on one thread.
-     *
-     * @param e the key event
-     */
+    /** Queues a key press for the game loop (called on Java's input thread). */
     @Override
     public void keyPressed(KeyEvent e) {
-        synchronized (pendingInput) {
-            pendingInput.add(new int[] {e.getKeyCode(), e.isShiftDown() ? 1 : 0});
+        synchronized (keys) {
+            keys.add(e.getKeyCode());
         }
-    }
-
-    /**
-     * Queues a mouse click for the game loop, like key presses.
-     *
-     * @param e the mouse event
-     */
-    @Override
-    public void mouseClicked(MouseEvent e) {
-        synchronized (pendingInput) {
-            pendingInput.add(new int[] {CLICK, e.getX(), e.getY()});
-        }
-    }
-
-    /**
-     * Starts the game.
-     *
-     * @param args command-line arguments; --selftest runs the timed self-test
-     */
-    public static void main(String[] args) {
-        for (String arg : args) {
-            if (arg.equals("--selftest")) {
-                selfTest = true;
-            }
-        }
-        new PitWall().start(new String[0]);
     }
 }

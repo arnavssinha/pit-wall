@@ -9,7 +9,7 @@ rm -rf build/classes
 mkdir -p build/classes
 
 echo "Compiling src/*.java (release 11, all lint warnings are errors)..."
-javac --release 11 -Xlint:all -Werror -encoding UTF-8 \
+javac --release 11 -Xlint:all,-serial -Werror -encoding UTF-8 \
       -cp lib/acm.jar -d build/classes src/*.java
 
 # Data files travel inside the jar so a double-clicked jar finds them

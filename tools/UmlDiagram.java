@@ -22,7 +22,7 @@ import javax.imageio.ImageIO;
  * Developer tool (not part of the game) that reads src/*.java and writes the UML class
  * diagram as PlantUML text (docs/uml/classes.puml) and as a PNG (docs/uml/classes.png).
  * It draws with plain Java2D so no extra software is needed. Classes are grouped into
- * bands by layer, taken from tools/layers.txt.
+ * bands by layer: ui (files that import acm) and sim (the rest).
  * Usage: java tools/UmlDiagram.java
  */
 public final class UmlDiagram {
@@ -30,10 +30,7 @@ public final class UmlDiagram {
     /** Order and titles of the layer bands. */
     private static final String[][] BANDS = {
         {"ui", "ui  (ACM graphics and input)"},
-        {"sim", "sim  (pure simulation, no graphics imports)"},
-        {"ai", "ai  (computer drivers)"},
-        {"data", "data  (file loaders)"},
-        {"lab", "lab  (headless Strategy Lab)"},
+        {"sim", "sim  (simulation, no graphics imports)"},
     };
 
     /** Widest the image may grow before boxes wrap to a new row. */
@@ -76,14 +73,13 @@ public final class UmlDiagram {
      * @throws IOException if a file cannot be read or written
      */
     public static void main(String[] args) throws IOException {
-        Map<String, String> layers = readLayers(new File("tools/layers.txt"));
         Map<String, Clazz> classes = new LinkedHashMap<>();
         File[] files = new File("src").listFiles((dir, n) -> n.endsWith(".java"));
         java.util.Arrays.sort(files);
         for (File f : files) {
             Clazz c = parse(f);
             if (c != null) {
-                c.layer = layers.getOrDefault(f.getName(), "sim");
+                c.layer = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).contains("import acm.") ? "ui" : "sim";
                 classes.put(c.name, c);
             }
         }
@@ -91,28 +87,6 @@ public final class UmlDiagram {
         writePuml(classes, new File("docs/uml/classes.puml"));
         writePng(classes, new File("docs/uml/classes.png"));
         System.out.println("Wrote docs/uml/classes.puml and docs/uml/classes.png (" + classes.size() + " classes)");
-    }
-
-    /**
-     * Reads tools/layers.txt into a file-name to layer map.
-     *
-     * @param file the layers file
-     * @return map from file name to layer
-     * @throws IOException if reading fails
-     */
-    private static Map<String, String> readLayers(File file) throws IOException {
-        Map<String, String> map = new LinkedHashMap<>();
-        for (String line : Files.readAllLines(file.toPath(), StandardCharsets.UTF_8)) {
-            String t = line.trim();
-            if (t.isEmpty() || t.startsWith("#")) {
-                continue;
-            }
-            String[] parts = t.split("\\s+");
-            if (parts.length == 2) {
-                map.put(parts[1], parts[0]);
-            }
-        }
-        return map;
     }
 
     /**

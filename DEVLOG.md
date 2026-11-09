@@ -380,3 +380,34 @@ only the player marker, tire colors and puncture/lock-up effects on the cars.
   lost a corner eases off gently; stronger tow; AI drivers stuck behind the same car grow bolder; AI drivers
   switch between Push, Balanced and Conserve every couple of kilometers. Push is now +3% pace.
 - Engineer stays quiet during the start.
+
+## Simplification rewrite (2026-11-09), from owner feedback
+
+**Asked:** strip the code and the game down so three high-school students can understand and explain every part:
+fewer classes, short one-line Javadoc, no feature whose code costs more than it adds. Remove the Strategy Lab,
+Monza, the menu/setup screens and the pre-race planner; 10 drivers; simpler overtakes, AI and racing line.
+Owner choices: keep rain and the start lights (simplified); overtakes are a simple chance plus a lane swap; keep a
+few data structures where they fit naturally; go straight into the race, R restarts.
+
+**Done**
+- Rewritten from scratch: 87 classes and about 17,000 lines down to 9 classes and about 1,700 lines
+  (`Track`, `Compound`, `Car`, `Fight`, `Ai`, `Race`, `PitWall`, `TrackView`, `Hud`).
+- Removed: menu, track select, setup, results charts, Strategy Lab, Monza, safety car, retirements, brakes,
+  tire temperature, punctures, minimap, raster renderer, data loaders, pre-race pit planner.
+- Interlagos geometry baked into `data/interlagos.csv` (the old rounding and separation code is gone).
+- Racing line: one smoothing loop. Speed: corner limit from curvature plus one backward braking pass.
+- Overtakes: a fight opens within 1 s of the car ahead before a braking point; at the braking point
+  `Fight.chance` decides; on success the cars swap lanes. Start fights happen naturally off the grid.
+- Pit stops: keys 1-5 box this lap for that tire; B cancels.
+- Data structures: ArrayList (cars, fights), PriorityQueue (weather), ArrayDeque (radio, keys), HashMap
+  (radio cooldowns), 2D array (lap times).
+- Fixed a deadlock found while testing: two cars at exactly the same distance each blocked the other.
+
+**Verified**
+- `./test.sh`: 20 full races finish with all 10 cars, winner's best lap 70-80 s, rain and rain tires happen,
+  pit stop fits the chosen tires, chance formula range/boost/cover, tire grip and AI tire choice.
+- `tools/audit.sh`: all checks pass. `--selftest`: about 60 FPS.
+- Played through a full race on a virtual display: lights, launch, attack and defend prompts with colored lines,
+  a pass, a pit stop, the finish banner.
+
+**Not verified:** double-click launch on the owner's Mac.
