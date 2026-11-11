@@ -1,7 +1,0 @@
-# APPROXIMATE FALLBACK WEATHER. NOT MEASURED DATA.
-# Rough values from general knowledge of the race weekend climate, used only because the FastF1
-# export (tools/export_data.py) could not run. Replace with data/weather_stats.csv from the export.
-# sessionsUsed is 0 because no sessions were measured.
-trackId,airTempMean,airTempSd,trackTempMean,trackTempSd,rainChance,sessionsUsed
-monza,25.0,3.0,38.0,6.0,0.15,0
-saopaulo,24.0,4.0,40.0,8.0,0.35,0
