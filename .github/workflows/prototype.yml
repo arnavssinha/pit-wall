@@ -1,0 +1,21 @@
+name: ACM prototype checks
+on:
+  push:
+    branches: [submission-acm-feasibility]
+  pull_request:
+    branches: [simplified]
+jobs:
+  prototype:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile prototype
+        run: bash build.sh
+      - name: Run headless geometry checks
+        run: bash test.sh
+      - name: Generate method-level JavaDoc
+        run: bash docs.sh

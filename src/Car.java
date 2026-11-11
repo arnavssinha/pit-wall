@@ -1,60 +1,116 @@
-import java.awt.Graphics2D;
-import java.awt.geom.AffineTransform;
+import acm.graphics.GCanvas;
+import acm.graphics.GPolygon;
+import java.awt.Color;
 
-public class Car {
-    private double length;
-    private double width;
-    
-    // Position and orientation (in physics world units)
+/**
+ * A rectangular car on the circular track; world Y points up.
+ *
+ * @author @harnoor
+ * @author @samuel
+ */
+public final class Car {
+    private final double length;
+    private final double width;
     private double x;
     private double y;
-    private double angle; // angle in radians
+    private double angle;
 
+    /**
+     * Creates a car with the specified dimensions.
+     *
+     * @author @harnoor
+     * @param length car length in world units
+     * @param width car width in world units
+     */
     public Car(double length, double width) {
+        if (length <= 0 || width <= 0) {
+            throw new IllegalArgumentException("Car dimensions must be positive.");
+        }
         this.length = length;
         this.width = width;
-        this.x = 0;
-        this.y = 0;
-        this.angle = 0;
     }
 
     /**
-     * Updates the car's position and orientation to follow the track's parametric curve.
+     * Moves the car to the track centerline at angle t.
      *
-     * @param t Parameter angle along the track (radians)
-     * @param track The track being traversed
+     * @author @harnoor
+     * @param t angle along the track in radians
+     * @param track track being traversed
      */
     public void update(double t, Track track) {
-        this.x = track.getX(t);
-        this.y = track.getY(t);
-        this.angle = track.getHeading(t);
+        x = track.getX(t);
+        y = track.getY(t);
+        angle = track.getHeading(t);
     }
 
     /**
-     * Renders the car on screen with proper position, rotation, and scale.
+     * Draws the car with ACM Graphics, returning the shape for later removal.
+     *
+     * @author @samuel
+     * @param canvas ACM canvas
+     * @param cx screen X of the track center
+     * @param cy screen Y of the track center
+     * @param scale pixels per world unit
+     * @return drawn car polygon
      */
-    public void draw(Graphics2D g2d, int cx, int cy, double scale) {
-        // Save current transform
-        AffineTransform oldTransform = g2d.getTransform();
+    public GPolygon draw(GCanvas canvas, double cx, double cy, double scale) {
+        GPolygon shape = new GPolygon(cx + x * scale, cy - y * scale);
+        double halfLength = length * scale / 2.0;
+        double halfWidth = width * scale / 2.0;
 
-        // Screen coordinate translation (flip Y axis for standard math coordinates)
-        double screenX = cx + (x * scale);
-        double screenY = cy - (y * scale);
+        addCorner(shape, -halfLength, -halfWidth);
+        addCorner(shape, halfLength, -halfWidth);
+        addCorner(shape, halfLength, halfWidth);
+        addCorner(shape, -halfLength, halfWidth);
 
-        g2d.translate(screenX, screenY);
-        g2d.rotate(-angle); // Rotate to match car heading
-
-        // Draw car rectangle centered at origin
-        int drawW = (int) (length * scale);
-        int drawH = (int) (width * scale);
-
-        g2d.drawRect(-drawW / 2, -drawH / 2, drawW, drawH);
-
-        // Restore transform
-        g2d.setTransform(oldTransform);
+        shape.setFilled(true);
+        shape.setFillColor(new Color(30, 207, 215));
+        shape.setColor(Color.WHITE);
+        canvas.add(shape);
+        return shape;
     }
 
-    public double getX() { return x; }
-    public double getY() { return y; }
-    public double getAngle() { return angle; }
+    /**
+     * Adds a rotated rectangle corner and flips mathematical Y for screen Y.
+     *
+     * @author @samuel
+     * @param polygon the car polygon
+     * @param forward distance along the car's length
+     * @param sideways distance across the car's width
+     */
+    private void addCorner(GPolygon polygon, double forward, double sideways) {
+        double dx = forward * Math.cos(angle) - sideways * Math.sin(angle);
+        double dy = -forward * Math.sin(angle) - sideways * Math.cos(angle);
+        polygon.addVertex(dx, dy);
+    }
+
+    /**
+     * Returns the car X coordinate.
+     *
+     * @author @harnoor
+     * @return world X coordinate
+     */
+    public double getX() {
+        return x;
+    }
+
+    /**
+     * Returns the car Y coordinate.
+     *
+     * @author @harnoor
+     * @return world Y coordinate
+     */
+    public double getY() {
+        return y;
+    }
+
+    /**
+     * Returns the car heading.
+     *
+     * @author @harnoor
+     * @return heading in radians
+     */
+    public double getAngle() {
+        return angle;
+    }
 }
