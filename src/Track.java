@@ -1,55 +1,137 @@
-import java.awt.Graphics2D;
+import acm.graphics.GCanvas;
+import acm.graphics.GOval;
+import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * Represents the circular track and its centerline.
+ * The geometry is unchanged from the original simplified branch.
+ *
+ * @author @harnoor
+ * @author @samuel
+ * @author @arnav
+ */
 public class Track {
     private double radius;
     private double trackWidth;
 
+    // Keep references to ACM graphics so repeated draws replace old outlines.
+    private final List<GOval> renderedBoundaries = new ArrayList<GOval>();
+    private GCanvas renderedOn;
+
+    /**
+     * Creates a circular track with the given radius and width.
+     *
+     * @author @harnoor
+     * @param radius radius of the center trajectory
+     * @param trackWidth width of the track
+     */
     public Track(double radius, double trackWidth) {
         this.radius = radius;
         this.trackWidth = trackWidth;
     }
 
     /**
-     * Parametric X coordinate: x(t) = R * cos(t)
+     * Calculates the parametric X coordinate: x(t) = R * cos(t).
+     *
+     * @author @harnoor
+     * @param t angular position, in radians
+     * @return centerline X coordinate
      */
     public double getX(double t) {
         return radius * Math.cos(t);
     }
 
     /**
-     * Parametric Y coordinate: y(t) = R * sin(t)
+     * Calculates the parametric Y coordinate: y(t) = R * sin(t).
+     *
+     * @author @harnoor
+     * @param t angular position, in radians
+     * @return centerline Y coordinate
      */
     public double getY(double t) {
         return radius * Math.sin(t);
     }
 
     /**
-     * Heading tangent to the circle: heading = t + PI/2
+     * Calculates the heading tangent to the circle: t + PI / 2.
+     *
+     * @author @harnoor
+     * @param t angular position, in radians
+     * @return direction of travel, in radians
      */
     public double getHeading(double t) {
         return t + (Math.PI / 2.0);
     }
 
     /**
-     * Draws the inner and outer boundaries of the track along with the center trajectory.
+     * Draws the outer boundary, inner boundary, and center trajectory using
+     * ACM Graphics. Uses the original diameter calculations and coordinates.
+     *
+     * @author @samuel
+     * @param canvas ACM canvas on which to draw the track
+     * @param cx horizontal screen coordinate of the track center
+     * @param cy vertical screen coordinate of the track center
+     * @param scale pixels per world unit
      */
-    public void draw(Graphics2D g2d, int cx, int cy, double scale) {
+    public void draw(GCanvas canvas, int cx, int cy, double scale) {
+        // An ACM canvas retains shapes, so erase previous outlines if redrawn.
+        if (renderedOn != null) {
+            for (GOval boundary : renderedBoundaries) {
+                renderedOn.remove(boundary);
+            }
+        }
+        renderedBoundaries.clear();
+
         double rOuter = radius + (trackWidth / 2.0);
         double rInner = radius - (trackWidth / 2.0);
 
-        // Draw outer boundary
         int outerDiameter = (int) (rOuter * 2 * scale);
-        g2d.drawOval(cx - outerDiameter / 2, cy - outerDiameter / 2, outerDiameter, outerDiameter);
+        drawBoundary(canvas, cx, cy, outerDiameter);
 
-        // Draw inner boundary
         int innerDiameter = (int) (rInner * 2 * scale);
-        g2d.drawOval(cx - innerDiameter / 2, cy - innerDiameter / 2, innerDiameter, innerDiameter);
+        drawBoundary(canvas, cx, cy, innerDiameter);
 
-        // Draw centerline (center trajectory)
         int centerDiameter = (int) (radius * 2 * scale);
-        g2d.drawOval(cx - centerDiameter / 2, cy - centerDiameter / 2, centerDiameter, centerDiameter);
+        drawBoundary(canvas, cx, cy, centerDiameter);
+
+        renderedOn = canvas;
     }
 
-    public double getRadius() { return radius; }
-    public double getTrackWidth() { return trackWidth; }
+    /**
+     * Adds one outline circle to the ACM canvas and tracks it for redrawing.
+     *
+     * @author @samuel
+     * @param canvas canvas receiving the circle
+     * @param cx horizontal coordinate of the circle center
+     * @param cy vertical coordinate of the circle center
+     * @param diameter diameter in screen pixels
+     */
+    private void drawBoundary(GCanvas canvas, int cx, int cy, int diameter) {
+        GOval boundary = new GOval(
+                cx - diameter / 2, cy - diameter / 2, diameter, diameter);
+        boundary.setFilled(false);
+        canvas.add(boundary);
+        renderedBoundaries.add(boundary);
+    }
+
+    /**
+     * Returns the centerline radius.
+     *
+     * @author @arnav
+     * @return the track radius
+     */
+    public double getRadius() {
+        return radius;
+    }
+
+    /**
+     * Returns the track width.
+     *
+     * @author @arnav
+     * @return the track width
+     */
+    public double getTrackWidth() {
+        return trackWidth;
+    }
 }
